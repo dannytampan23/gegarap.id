@@ -100,6 +100,7 @@ async function main() {
   console.log('🌱 Seeding database...');
 
   // Order matters because of FK relations.
+  await prisma.auditLog.deleteMany();
   await prisma.review.deleteMany();
   await prisma.payment.deleteMany();
   await prisma.job.deleteMany();
@@ -123,6 +124,7 @@ async function main() {
             payoutMethod: 'gopay',
             payoutDetails: { phone: p.goPayNumber },
             isVerified: true,
+            kycStatus: 'APPROVED',
             available: true,
             bio: p.bio,
             rating: p.rating,
@@ -142,6 +144,41 @@ async function main() {
       });
     }
   }
+
+  // An admin account so the KYC panel is reachable locally. Login-testable via
+  // WhatsApp OTP on phone 628130000001 (role is ADMIN).
+  await prisma.user.create({
+    data: {
+      name: 'Admin gegarap',
+      email: 'admin@gegarap.id',
+      phone: '628130000001',
+      role: 'ADMIN',
+    },
+  });
+
+  // A provider awaiting KYC, so the admin review queue isn't empty.
+  await prisma.user.create({
+    data: {
+      name: 'Calon Tukang (Pending)',
+      email: 'pending@example.com',
+      phone: '628110000099',
+      role: 'PROVIDER',
+      providerProfile: {
+        create: {
+          category: 'Tukang Bangunan',
+          districts: ['Depok', 'Mlati'],
+          dailyRate: 175000,
+          goPayNumber: '081200001111',
+          payoutMethod: 'gopay',
+          payoutDetails: { phone: '081200001111' },
+          isVerified: false,
+          kycStatus: 'PENDING',
+          ktpImageUrl: 'dev/ktp-placeholder',
+          bio: 'Menunggu verifikasi admin — contoh data untuk menguji alur KYC.',
+        },
+      },
+    },
+  });
 
   // A demo customer so the customer dashboard isn't empty. Login-testable via
   // WhatsApp OTP on phone 628120000001.

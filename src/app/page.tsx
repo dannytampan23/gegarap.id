@@ -16,7 +16,7 @@ import prisma from '@/lib/prisma';
 import { buttonVariants } from '@/components/ui/Button';
 import { Avatar } from '@/components/ui/Avatar';
 import MapWrapper from '@/components/map/MapWrapper';
-import type { ProviderListItem } from '@/lib/types';
+import { PROVIDER_MAP_SELECT, toMapProvider } from '@/lib/providers';
 
 export const dynamic = 'force-dynamic';
 
@@ -57,11 +57,18 @@ const steps = [
 ];
 
 export default async function Home() {
-  const providers = (await prisma.providerProfile.findMany({
-    where: { isVerified: true },
-    include: { user: { select: { name: true } } },
+  // Public-safe columns only; coordinates are fuzzed before reaching the map.
+  const providers = await prisma.providerProfile.findMany({
+    where: { isVerified: true, available: true },
+    select: {
+      ...PROVIDER_MAP_SELECT,
+      rating: true,
+      completedJobs: true,
+    },
     orderBy: { rating: 'desc' },
-  })) as ProviderListItem[];
+  });
+
+  const mapProviders = providers.map(toMapProvider);
 
   const count = providers.length;
   const avgRating = count > 0 ? providers.reduce((s, p) => s + p.rating, 0) / count : 0;
@@ -226,7 +233,7 @@ export default async function Home() {
             Live di Yogyakarta
           </span>
         </div>
-        <MapWrapper providers={providers} />
+        <MapWrapper providers={mapProviders} />
       </section>
 
       {/* ===== CTA band ===== */}

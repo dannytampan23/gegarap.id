@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import prisma from '@/lib/prisma';
 import { SearchClient } from '@/components/providers/SearchClient';
+import { PROVIDER_PUBLIC_SELECT } from '@/lib/providers';
 import type { ProviderListItem } from '@/lib/types';
 
 export const metadata: Metadata = {
@@ -16,9 +17,10 @@ export default async function SearchPage({
 }: {
   searchParams: { category?: string };
 }) {
+  // Only verified providers, and only public-safe columns reach the client.
   const providers = (await prisma.providerProfile.findMany({
-    where: { isVerified: true },
-    include: { user: { select: { name: true } } },
+    where: { isVerified: true, available: true },
+    select: PROVIDER_PUBLIC_SELECT,
     orderBy: { rating: 'desc' },
   })) as ProviderListItem[];
 

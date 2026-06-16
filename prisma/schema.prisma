@@ -52,7 +52,14 @@ model ProviderProfile {
   available     Boolean  @default(true)
   bio           String?
   avatarUrl     String?
-  ktpImageUrl   String? // URL KTP setelah upload (KYC)
+  ktpImageUrl   String? // PATH objek KTP di private bucket (bukan URL publik)
+
+  // KYC review state
+  kycStatus    String    @default("PENDING") // PENDING | APPROVED | REJECTED
+  kycReason    String? // alasan penolakan (jika REJECTED)
+  kycReviewedAt DateTime?
+  kycReviewedById String? // User.id admin yang meninjau
+
   rating        Float    @default(0)
   ratingCount   Int      @default(0)
   completedJobs Int      @default(0)
@@ -67,6 +74,7 @@ model ProviderProfile {
 
   @@index([category])
   @@index([isVerified])
+  @@index([kycStatus])
 }
 
 // ─── JOB (booking) ─────────────────────────────────────────────────────────
@@ -157,4 +165,21 @@ model ContactRequest {
   phone     String
   message   String
   createdAt DateTime @default(now())
+}
+
+// ─── AUDIT LOG ────────────────────────────────────────────────────────────
+// Append-only trail of sensitive admin/financial actions: who did what, to
+// which entity, and when. Drives "who approved KYC / who triggered a refund".
+model AuditLog {
+  id         String   @id @default(uuid())
+  actorId    String? // User.id of the actor (null = system/automated)
+  action     String // e.g. KYC_APPROVE, KYC_REJECT, REFUND_TRIGGERED
+  targetType String // e.g. ProviderProfile, Payment, Job
+  targetId   String
+  metadata   Json? // arbitrary context (reason, amounts, before/after)
+  createdAt  DateTime @default(now())
+
+  @@index([actorId])
+  @@index([targetType, targetId])
+  @@index([action])
 }

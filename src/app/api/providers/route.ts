@@ -3,12 +3,23 @@ import prisma from '@/lib/prisma';
 import { authOptions } from '@/lib/auth';
 import { ok, fail, handle } from '@/lib/api';
 import { onboardingSchema } from '@/lib/validations';
+import { PROVIDER_PUBLIC_SELECT } from '@/lib/providers';
+import { rateLimit, clientIp } from '@/lib/rate-limit';
 
-export async function GET() {
+export async function GET(req: Request) {
   return handle(async () => {
+    // Basic abuse protection on a public, unauthenticated endpoint.
+    const limit = rateLimit(`providers:${clientIp(req)}`, { windowMs: 60_000, max: 60 });
+    if (!limit.ok) {
+      return fail(`Terlalu banyak permintaan. Coba lagi dalam ${limit.retryAfter} detik.`, 429);
+    }
+
+    // STRICT projection: only verified + available providers, and only the
+    // public-safe columns (no payout, no KTP, no exact coordinates). Never use
+    // `include` here — it would return the whole row including sensitive PII.
     const providers = await prisma.providerProfile.findMany({
       where: { isVerified: true, available: true },
-      include: { user: { select: { name: true } } },
+      select: PROVIDER_PUBLIC_SELECT,
       orderBy: { rating: 'desc' },
     });
     return ok(providers);
@@ -46,6 +57,9 @@ export async function POST(req: Request) {
           goPayNumber: input.goPayNumber,
           bio: input.bio || null,
           ktpImageUrl: input.ktpImageUrl ?? undefined,
+          // Re-submitting after a rejection puts the profile back in review.
+          kycStatus: 'PENDING',
+          kycReason: null,
         },
         create: {
           userId: session.user.id,
@@ -56,6 +70,7 @@ export async function POST(req: Request) {
           bio: input.bio || null,
           ktpImageUrl: input.ktpImageUrl ?? null,
           isVerified: false, // pending KYC review
+          kycStatus: 'PENDING',
         },
       });
     });

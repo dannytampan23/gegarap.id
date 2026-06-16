@@ -82,7 +82,9 @@ export const onboardingSchema = z.object({
     .max(5_000_000, 'Tarif maksimal Rp 5.000.000'),
   goPayNumber: phoneSchema,
   bio: z.string().trim().max(500).optional().or(z.literal('')),
-  ktpImageUrl: z.url('URL KTP tidak valid').optional(),
+  // Private-storage object PATH returned by /api/upload/ktp (no longer a public
+  // URL). Resolved to a signed URL only for admin KYC review.
+  ktpImageUrl: z.string().trim().min(1).max(300).optional(),
 });
 
 export type OnboardingInput = z.infer<typeof onboardingSchema>;

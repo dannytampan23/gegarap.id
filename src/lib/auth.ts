@@ -1,5 +1,6 @@
 import type { NextAuthOptions } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
+import prisma from '@/lib/prisma';
 import { normalizePhone, verifyOtp, upsertUser } from '@/lib/otp';
 
 /**
@@ -43,12 +44,26 @@ export const authOptions: NextAuthOptions = {
     error: '/login',
   },
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger }) {
+      // On sign-in, seed the token from the authorize() result.
       if (user) {
         token.id = user.id;
         token.phone = (user as { phone?: string }).phone ?? token.phone;
         token.role = (user as { role?: string }).role ?? token.role;
       }
+
+      // Keep `role` authoritative against the DB. Without this, a JWT minted
+      // while the user was a CUSTOMER stays CUSTOMER even after onboarding
+      // promotes them to PROVIDER (or after an admin grant). Re-read on every
+      // refresh (no `user`) and on an explicit client session.update().
+      if (token.id && (!user || trigger === 'update')) {
+        const dbUser = await prisma.user.findUnique({
+          where: { id: token.id as string },
+          select: { role: true },
+        });
+        if (dbUser) token.role = dbUser.role;
+      }
+
       return token;
     },
     async session({ session, token }) {

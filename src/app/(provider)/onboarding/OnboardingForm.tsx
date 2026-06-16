@@ -22,7 +22,7 @@ const MAX_DISTRICTS = 5;
 export default function OnboardingForm() {
   const router = useRouter();
   const toast = useToast();
-  const { data: session, status } = useSession();
+  const { data: session, status, update: refreshSession } = useSession();
 
   const [form, setForm] = React.useState({
     name: '',
@@ -117,6 +117,10 @@ export default function OnboardingForm() {
         toast.error('Pendaftaran gagal', json.message ?? 'Silakan coba lagi.');
         return;
       }
+      // Refresh the session so the JWT role becomes PROVIDER immediately (the
+      // jwt callback re-reads role from the DB on update) — this lets the
+      // /provider area and "Dashboard Tukang" menu unlock without a re-login.
+      await refreshSession();
       setDone(true);
       toast.success('Profil terkirim!', 'Tim kami akan meninjau verifikasi Anda.');
     } catch {

@@ -15,6 +15,7 @@ import {
   LogOut,
   ChevronDown,
   User,
+  ShieldCheck,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { buttonVariants } from '@/components/ui/Button';
@@ -43,14 +44,17 @@ export function Navbar() {
   const authed = status === 'authenticated';
   const masked = maskPhone(session?.user?.phone);
   const isProvider = session?.user?.role === 'PROVIDER';
+  const isAdmin = session?.user?.role === 'ADMIN';
 
-  // "Dashboard" is the customer view; providers get an extra link to their
-  // own dashboard. (Riwayat Booking lives inside the customer dashboard.)
+  // "Dashboard" is the customer view; providers get an extra link to their own
+  // dashboard, and admins get the KYC panel. Links are role-gated so users never
+  // see an area they can't enter (middleware enforces it server-side too).
   const accountLinks = [
     { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     ...(isProvider
       ? [{ href: '/provider/dashboard', label: 'Dashboard Tukang', icon: ClipboardList }]
       : []),
+    ...(isAdmin ? [{ href: '/admin', label: 'Panel Admin (KYC)', icon: ShieldCheck }] : []),
   ];
 
   React.useEffect(() => {

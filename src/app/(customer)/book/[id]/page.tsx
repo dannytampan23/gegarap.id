@@ -16,10 +16,20 @@ interface BookingPageProps {
 export default async function BookingPage({ params }: BookingPageProps) {
   const provider = await prisma.providerProfile.findUnique({
     where: { id: params.id },
-    include: { user: { select: { name: true } } },
+    select: {
+      id: true,
+      category: true,
+      dailyRate: true,
+      rating: true,
+      ratingCount: true,
+      isVerified: true,
+      available: true,
+      user: { select: { name: true } },
+    },
   });
 
-  if (!provider) notFound();
+  // Only verified, available providers are bookable.
+  if (!provider || !provider.isVerified || !provider.available) notFound();
 
   return (
     <div className="container py-10 sm:py-14">
