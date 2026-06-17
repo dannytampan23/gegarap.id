@@ -7,7 +7,16 @@ const adapter = new PrismaPg({
 });
 const prisma = new PrismaClient({ adapter });
 
-const PLATFORM_FEE = 20_000;
+// Mirrors lib/calculations.ts (DEFAULT_FEE_RULE) so seeded demo jobs match the
+// live percent-based fee model. Inlined because the seed runs under tsx without
+// the '@/...' path alias.
+const MIN_DP = 20_000;
+const DEFAULT_FEE = {
+  platformFeePercent: 10,
+  dpPercent: 30,
+  minDpThresholdAmount: 2_000_000,
+  highValueDpPercent: 50,
+};
 
 const providers = [
   {
@@ -87,13 +96,18 @@ const providers = [
   },
 ];
 
-/** Snapshot financials for a job, mirroring lib/calculations.ts. */
-function financials(dailyRate: number, days: number, dp = PLATFORM_FEE) {
-  const totalFee = dailyRate * days;
-  const dpAmount = Math.max(dp, PLATFORM_FEE);
-  const platformCommission = PLATFORM_FEE;
-  const providerPayout = totalFee - platformCommission;
-  return { totalFee, dpAmount, platformCommission, providerPayout };
+/** Snapshot financials for a job, mirroring lib/calculations.ts (percent-based). */
+function financials(dailyRate: number, days: number) {
+  const subtotal = dailyRate * days;
+  const dpPct =
+    subtotal > DEFAULT_FEE.minDpThresholdAmount
+      ? DEFAULT_FEE.highValueDpPercent
+      : DEFAULT_FEE.dpPercent;
+  const dpAmount = Math.min(subtotal, Math.max(Math.floor((subtotal * dpPct) / 100), MIN_DP));
+  const platformCommission = Math.floor((subtotal * DEFAULT_FEE.platformFeePercent) / 100);
+  const providerPayout = subtotal - platformCommission;
+  const remainingAmount = subtotal - dpAmount;
+  return { totalFee: subtotal, dpAmount, platformCommission, providerPayout, remainingAmount };
 }
 
 async function main() {
@@ -102,10 +116,35 @@ async function main() {
   // Order matters because of FK relations.
   await prisma.auditLog.deleteMany();
   await prisma.review.deleteMany();
-  await prisma.payment.deleteMany();
+  await prisma.payment.deleteMany(); // cascades PaymentEvent/Payout/RefundRequest
   await prisma.job.deleteMany();
   await prisma.providerProfile.deleteMany();
   await prisma.user.deleteMany();
+  await prisma.fraudFlag.deleteMany();
+  await prisma.webhookEvent.deleteMany();
+  await prisma.campaign.deleteMany();
+  await prisma.feeConfig.deleteMany();
+
+  // Fee rules (percent-based, configurable per category). DEFAULT is the
+  // platform-wide fallback; the category override demonstrates per-category fees.
+  const defaultFeeConfig = await prisma.feeConfig.create({
+    data: {
+      category: 'DEFAULT',
+      platformFeePercent: DEFAULT_FEE.platformFeePercent,
+      dpPercent: DEFAULT_FEE.dpPercent,
+      minDpThresholdAmount: DEFAULT_FEE.minDpThresholdAmount,
+      highValueDpPercent: DEFAULT_FEE.highValueDpPercent,
+    },
+  });
+  await prisma.feeConfig.create({
+    data: {
+      category: 'Tukang Bangunan',
+      platformFeePercent: 8,
+      dpPercent: 40,
+      minDpThresholdAmount: 3_000_000,
+      highValueDpPercent: 50,
+    },
+  });
 
   const createdProfiles: { id: string; dailyRate: number }[] = [];
   for (const p of providers) {
@@ -263,6 +302,13 @@ async function main() {
           create: {
             amount: fin.dpAmount,
             type: 'DP',
+            customerId: customer.id,
+            providerProfileId: profile.id,
+            dpAmount: fin.dpAmount,
+            remainingAmount: fin.remainingAmount,
+            platformFee: fin.platformCommission,
+            providerAmount: fin.providerPayout,
+            feeConfigId: defaultFeeConfig.id,
             midtransOrderId: `GGR-SEED-${i}-${Date.now()}`,
             ...paymentData,
           },

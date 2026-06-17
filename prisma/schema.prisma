@@ -22,6 +22,7 @@ model User {
   updatedAt       DateTime         @updatedAt
   jobsAsCustomer  Job[]            @relation("CustomerJobs")
   reviews         Review[]
+  payments        Payment[]        @relation("CustomerPayments")
   providerProfile ProviderProfile?
 }
 
@@ -44,7 +45,7 @@ model ProviderProfile {
   userId        String   @unique
   category      String
   districts     String[] @default([]) // kecamatan operasional, maks 5
-  dailyRate     Float
+  dailyRate     Int // tarif/hari dalam Rupiah utuh (integer minor-unit)
   goPayNumber   String?
   payoutMethod  String? // "bank" | "gopay" | "ovo" | "dana"
   payoutDetails Json? // { bankName, accountNumber, accountName } atau { phone }
@@ -68,9 +69,11 @@ model ProviderProfile {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  jobsAsProvider Job[]    @relation("ProviderJobs")
+  jobsAsProvider Job[]     @relation("ProviderJobs")
   reviews        Review[]
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  payments       Payment[] @relation("ProviderPayments")
+  payouts        Payout[]
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([category])
   @@index([isVerified])
@@ -94,12 +97,12 @@ model Job {
   notes             String?
   isConsentGiven    Boolean  @default(true)
 
-  // Finansial — semua dalam Rupiah
-  dailyRate          Float @default(0) // snapshot tarif saat booking
-  totalFee           Float // subtotal = dailyRate * estimatedDays
-  dpAmount           Float @default(0) // DP yang dibayar (min Rp 20.000)
-  platformCommission Float // platform fee flat Rp 20.000
-  providerPayout     Float // totalFee - platformCommission
+  // Finansial — semua dalam Rupiah utuh (integer minor-unit, tanpa desimal)
+  dailyRate          Int @default(0) // snapshot tarif saat booking
+  totalFee           Int // subtotal = dailyRate * estimatedDays
+  dpAmount           Int @default(0) // DP yang dibayar
+  platformCommission Int @default(0) // platform fee (dari FeeConfig)
+  providerPayout     Int @default(0) // totalFee - platformCommission
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -115,30 +118,193 @@ model Job {
 }
 
 // ─── PAYMENT ──────────────────────────────────────────────────────────────
+// The financial source of truth for a booking. Money fields are integer Rupiah
+// snapshots taken at creation (fee rules can change later — this never does).
+// State transitions are backend-only and every one is logged to PaymentEvent.
 model Payment {
   id     String @id @default(uuid())
   jobId  String @unique
-  amount Float // jumlah DP yang dibayar
-  type   String @default("DP")
-  status String @default("PENDING") // PENDING|PAID|DISBURSED|REFUNDED|FAILED
+  amount Int // nilai DP yang ditagih (untuk Snap charge pertama)
+  type   String @default("DP") // DP | FULL
+  // Lifecycle (Bagian 3):
+  // DRAFT|PENDING|PAID|HELD|RELEASED|REFUND_REQUESTED|REFUNDED|REFUND_REJECTED|DISPUTED|EXPIRED|FAILED
+  status String @default("PENDING")
 
-  // Midtrans
-  midtransTrxId       String?   @unique
-  midtransOrderId     String?   @unique // format: GGR-{jobId}-{timestamp}
+  // Denormalised principals — indexed for admin/dashboard queries.
+  customerId        String?
+  providerProfileId String?
+
+  // Financial snapshot (Bagian 6). round_down sisa pembulatan jadi milik platform.
+  dpAmount        Int @default(0) // bagian yang dibayar di muka
+  remainingAmount Int @default(0) // sisa yang ditagih saat job selesai
+  platformFee     Int @default(0) // fee platform (snapshot)
+  providerAmount  Int @default(0) // amount - platformFee
+
+  // Aturan fee yang dipakai saat transaksi ini (snapshot reference, BUKAN live).
+  feeConfigId String?
+  campaignId  String?
+
+  // Gateway
+  paymentGateway      String  @default("MIDTRANS") // MIDTRANS | XENDIT
+  idempotencyKey      String? @unique // unik per percobaan pembayaran
+  midtransTrxId       String? @unique
+  midtransOrderId     String? @unique // externalId — format: GGR-{jobId}-{timestamp}
   midtransToken       String? // Snap token
   midtransPaymentType String? // gopay, bank_transfer, dll
   midtransVaNumber    String? // virtual account number jika ada
   paidAt              DateTime?
 
-  // Disbursement (setelah customer klik Selesai)
+  // Disbursement bookkeeping (canonical record is Payout; these are kept for
+  // backward-compat with the existing complete flow).
   disbursedAt        DateTime?
-  disbursedAmount    Float?
-  platformFeeCharged Float?
+  disbursedAmount    Int?
+  platformFeeCharged Int?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  job            Job             @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  customer       User?           @relation("CustomerPayments", fields: [customerId], references: [id])
+  provider       ProviderProfile? @relation("ProviderPayments", fields: [providerProfileId], references: [id])
+  events         PaymentEvent[]
+  refundRequests RefundRequest[]
+  payouts        Payout[]
+
+  @@index([customerId])
+  @@index([providerProfileId])
+  @@index([status])
+}
+
+// ─── PAYMENT EVENT ─────────────────────────────────────────────────────────
+// Append-only audit log of every payment state transition. Must be able to
+// reconstruct a transaction's full history. Never updated or deleted.
+model PaymentEvent {
+  id                String   @id @default(uuid())
+  paymentId         String
+  fromStatus        String?
+  toStatus          String
+  triggeredBy       String // SYSTEM | WEBHOOK | <userId of admin/customer/provider>
+  reason            String?
+  rawWebhookPayload Json? // forensic copy of the gateway payload, if any
+  createdAt         DateTime @default(now())
+
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@index([paymentId])
+}
+
+// ─── REFUND REQUEST ────────────────────────────────────────────────────────
+model RefundRequest {
+  id             String   @id @default(uuid())
+  paymentId      String
+  requestedById  String // User.id (customer/admin)
+  reason         String
+  evidenceUrls   String[] @default([])
+  type           String // FULL | PARTIAL
+  amount         Int? // wajib untuk PARTIAL
+  status         String   @default("PENDING_REVIEW") // PENDING_REVIEW | APPROVED | REJECTED
+  resolvedById   String?
+  resolvedAt     DateTime?
+  resolutionNote String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@index([paymentId])
+  @@index([status])
+}
+
+// ─── PAYOUT ────────────────────────────────────────────────────────────────
+// One disbursement attempt to a provider. Mockable via IDisbursementProvider.
+model Payout {
+  id                     String   @id @default(uuid())
+  providerProfileId      String
+  paymentId              String
+  amount                 Int
+  status                 String   @default("SCHEDULED") // SCHEDULED | PROCESSING | SUCCESS | FAILED
+  disbursementExternalId String?
+  failureReason          String?
+  scheduledAt            DateTime @default(now())
+  executedAt             DateTime?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  payment  Payment         @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  provider ProviderProfile @relation(fields: [providerProfileId], references: [id])
+
+  @@index([providerProfileId])
+  @@index([paymentId])
+  @@index([status])
+}
+
+// ─── FEE CONFIG ────────────────────────────────────────────────────────────
+// Configurable fee/DP rules per service category. NEVER hardcode fees in code —
+// a Payment snapshots the FeeConfig id it used. `category = "DEFAULT"` is the
+// fallback when no category-specific row is effective.
+model FeeConfig {
+  id                   String    @id @default(uuid())
+  category             String // matches ProviderProfile.category, or "DEFAULT"
+  platformFeePercent   Float // mis. 10 = 10%
+  dpPercent            Float // mis. 30 = 30%
+  minDpThresholdAmount Int       @default(0) // subtotal di atas ini → DP dinaikkan
+  highValueDpPercent   Float     @default(50) // DP% untuk job di atas threshold
+  effectiveFrom        DateTime  @default(now())
+  effectiveTo          DateTime?
+  createdAt            DateTime  @default(now())
+
+  @@index([category])
+}
+
+// ─── CAMPAIGN ──────────────────────────────────────────────────────────────
+// Promo that overrides ONLY platformFee (never dpAmount/providerAmount — a
+// promo must never cost the provider).
+model Campaign {
+  id                 String   @id @default(uuid())
+  name               String
+  feeOverridePercent Float // mis. 0 = promo gratis biaya admin
+  eligibleCategories String[] @default([]) // kosong = semua kategori
+  startDate          DateTime
+  endDate            DateTime
+  usageLimit         Int?
+  usedCount          Int      @default(0)
+  active             Boolean  @default(true)
+  createdAt          DateTime @default(now())
+
+  @@index([active])
+}
+
+// ─── FRAUD FLAG ────────────────────────────────────────────────────────────
+// Flags NEVER auto-block an account — an admin decides (avoids false positives
+// hurting honest users).
+model FraudFlag {
+  id           String    @id @default(uuid())
+  userId       String
+  type         String // VELOCITY | REFUND_ABUSE | DEVICE_MISMATCH | MANUAL
+  severity     String    @default("LOW") // LOW | MEDIUM | HIGH
+  note         String?
+  createdAt    DateTime  @default(now())
+  resolvedAt   DateTime?
+  resolvedById String?
+
+  @@index([userId])
+  @@index([type])
+}
+
+// ─── WEBHOOK EVENT ─────────────────────────────────────────────────────────
+// Idempotency ledger for inbound gateway notifications. The unique constraint
+// makes duplicate retries a no-op (insert fails → we ack 200 without reprocessing).
+model WebhookEvent {
+  id             String   @id @default(uuid())
+  gateway        String   @default("MIDTRANS")
+  externalId     String // order_id
+  eventType      String // transaction_status
+  signatureValid Boolean
+  rawPayload     Json
+  processedAt    DateTime @default(now())
+
+  @@unique([gateway, externalId, eventType])
+  @@index([externalId])
 }
 
 // ─── REVIEW ───────────────────────────────────────────────────────────────

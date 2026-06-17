@@ -7,5 +7,10 @@
     "deploymentEnabled": {
       "main": false
     }
-  }
+  },
+  "crons": [
+    { "path": "/api/cron/auto-cancel", "schedule": "*/5 * * * *" },
+    { "path": "/api/cron/reconcile", "schedule": "*/15 * * * *" },
+    { "path": "/api/cron/auto-release", "schedule": "0 * * * *" }
+  ]
 }

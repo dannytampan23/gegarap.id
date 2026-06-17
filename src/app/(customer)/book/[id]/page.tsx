@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import prisma from '@/lib/prisma';
+import { resolveFee } from '@/lib/fee-config';
 import BookingForm from './BookingForm';
 
 export const metadata: Metadata = {
@@ -30,6 +31,17 @@ export default async function BookingPage({ params }: BookingPageProps) {
 
   // Only verified, available providers are bookable.
   if (!provider || !provider.isVerified || !provider.available) notFound();
+
+  // Resolve the category's fee rule so the form's DP/total estimate matches the
+  // amount the server will actually charge (campaign ids are server-only).
+  const fee = await resolveFee(provider.category);
+  const feeRule = {
+    platformFeePercent: fee.platformFeePercent,
+    dpPercent: fee.dpPercent,
+    minDpThresholdAmount: fee.minDpThresholdAmount,
+    highValueDpPercent: fee.highValueDpPercent,
+    campaignFeePercent: fee.campaignFeePercent,
+  };
 
   return (
     <div className="container py-10 sm:py-14">
@@ -59,6 +71,7 @@ export default async function BookingPage({ params }: BookingPageProps) {
           rating: provider.rating,
           ratingCount: provider.ratingCount,
         }}
+        feeRule={feeRule}
       />
     </div>
   );

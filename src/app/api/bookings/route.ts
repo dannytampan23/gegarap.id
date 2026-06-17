@@ -5,6 +5,7 @@ import { authOptions } from '@/lib/auth';
 import { ok, fail, handle } from '@/lib/api';
 import { bookingSchema } from '@/lib/validations';
 import { calculateBookingFinancials } from '@/lib/calculations';
+import { resolveFee } from '@/lib/fee-config';
 import { createSnapToken } from '@/lib/midtrans';
 import { sendWAMessage } from '@/lib/whatsapp';
 
@@ -30,8 +31,16 @@ export async function POST(req: Request) {
       return fail('Tukang tidak tersedia.', 400);
     }
 
-    // 4. Financials — flat platform fee, DP min Rp 20.000.
-    const fin = calculateBookingFinancials(provider.dailyRate, input.estimatedDays, input.dpAmount);
+    // 4. Financials — resolve the category's fee rule (FeeConfig + campaign),
+    //    then snapshot it. The Payment stores feeConfigId so later config
+    //    changes never rewrite this transaction's economics.
+    const fee = await resolveFee(provider.category);
+    const fin = calculateBookingFinancials(
+      provider.dailyRate,
+      input.estimatedDays,
+      fee,
+      input.dpAmount
+    );
 
     // 5. Build the Snap token first (using a pre-generated job id) so we never
     //    persist a booking whose payment couldn't be created.
@@ -70,6 +79,15 @@ export async function POST(req: Request) {
             amount: fin.dpAmount,
             type: 'DP',
             status: 'PENDING',
+            customerId: session.user.id,
+            providerProfileId: provider.id,
+            dpAmount: fin.dpAmount,
+            remainingAmount: fin.remainingAmount,
+            platformFee: fin.platformFee,
+            providerAmount: fin.providerEarnings,
+            feeConfigId: fee.feeConfigId,
+            campaignId: fee.campaignId,
+            idempotencyKey: orderId, // unik per percobaan pembayaran
             midtransOrderId: orderId,
             midtransToken: snap.token,
           },

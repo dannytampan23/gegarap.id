@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { ShieldCheck } from 'lucide-react';
+import { ShieldCheck, Wallet } from 'lucide-react';
 import { requireAdmin } from '@/lib/admin-guard';
 import { AdminKycClient } from './AdminKycClient';
 
@@ -26,6 +27,13 @@ export default async function AdminPage() {
           Tinjau dokumen KTP dan data pencairan tukang yang menunggu persetujuan. Hanya tukang yang
           disetujui yang tampil di marketplace.
         </p>
+        <Link
+          href="/admin/payments"
+          className="mt-4 inline-flex items-center gap-2 rounded-xl border border-border bg-card px-3.5 py-2 text-sm font-semibold text-foreground hover:border-primary hover:text-primary"
+        >
+          <Wallet className="h-4 w-4" />
+          Lihat Transaksi Pembayaran
+        </Link>
       </div>
 
       <AdminKycClient />

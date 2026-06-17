@@ -11,7 +11,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Rating } from '@/components/ui/Rating';
 import { Badge } from '@/components/ui/Badge';
 import { useToast } from '@/components/ui/Toast';
-import { calculateBookingFinancials, MINIMUM_DP } from '@/lib/calculations';
+import { calculateBookingFinancials, type FeeRule } from '@/lib/calculations';
 import { formatCurrency } from '@/lib/utils';
 import { bookingSchema, fieldErrors, DISTRICTS, TIME_SLOTS } from '@/lib/validations';
 
@@ -24,6 +24,8 @@ interface BookingFormProps {
     rating: number;
     ratingCount: number;
   };
+  /** Resolved fee rule (percent-based DP & platform fee) for this category. */
+  feeRule: FeeRule;
 }
 
 const TIME_SLOT_LABELS: Record<string, string> = {
@@ -37,7 +39,7 @@ function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-export default function BookingForm({ provider }: BookingFormProps) {
+export default function BookingForm({ provider, feeRule }: BookingFormProps) {
   const router = useRouter();
   const pathname = usePathname();
   const toast = useToast();
@@ -50,7 +52,6 @@ export default function BookingForm({ provider }: BookingFormProps) {
     scheduledDate: todayISO(),
     timeSlot: TIME_SLOTS[0] as string,
     estimatedDays: 1,
-    dpAmount: MINIMUM_DP,
   });
   const [errors, setErrors] = React.useState<Record<string, string>>({});
   const [submitting, setSubmitting] = React.useState(false);
@@ -62,11 +63,9 @@ export default function BookingForm({ provider }: BookingFormProps) {
     }
   }, [status, router, pathname]);
 
-  const fin = calculateBookingFinancials(
-    provider.dailyRate,
-    form.estimatedDays || 1,
-    form.dpAmount || MINIMUM_DP
-  );
+  // DP & platform fee are percent-based (config-driven) — the customer no longer
+  // types a DP; we show exactly what the server will charge.
+  const fin = calculateBookingFinancials(provider.dailyRate, form.estimatedDays || 1, feeRule);
 
   const update = (key: keyof typeof form, value: string | number) => {
     setForm((f) => ({ ...f, [key]: value }));
@@ -269,19 +268,21 @@ export default function BookingForm({ provider }: BookingFormProps) {
 
             <div className="my-4 border-t border-border" />
 
-            <Field label="DP dibayar sekarang" required error={errors.dpAmount}>
-              <Input
-                type="number"
-                min={MINIMUM_DP}
-                step={1000}
-                value={form.dpAmount}
-                onChange={(e) => update('dpAmount', Number(e.target.value) || 0)}
-                invalid={!!errors.dpAmount}
-              />
-            </Field>
-            <p className="mt-1.5 text-xs text-muted-foreground">
-              Minimum DP {formatCurrency(MINIMUM_DP)}. Sisa {formatCurrency(fin.remainingAmount)}{' '}
-              dibayar setelah pekerjaan selesai.
+            <dl className="space-y-2.5 text-sm">
+              <div className="flex justify-between">
+                <dt className="font-semibold text-foreground">
+                  DP dibayar sekarang ({fin.dpPercentApplied}%)
+                </dt>
+                <dd className="font-bold text-primary">{formatCurrency(fin.dpAmount)}</dd>
+              </div>
+              <div className="flex justify-between text-muted-foreground">
+                <dt>Sisa setelah selesai</dt>
+                <dd>{formatCurrency(fin.remainingAmount)}</dd>
+              </div>
+            </dl>
+            <p className="mt-2 text-xs text-muted-foreground">
+              DP mengamankan jadwal dengan tukang. Sisa pembayaran ditagih setelah pekerjaan
+              dikonfirmasi selesai, dan dana ditahan aman oleh sistem hingga selesai.
             </p>
 
             <Button type="submit" size="lg" loading={submitting} className="mt-5 w-full">
