@@ -50,3 +50,7 @@ ui-debug.log
 next-env.d.ts
 
 /src/generated/prisma
+
+# local dev run logs
+dev-stack.log
+emu-run.log
