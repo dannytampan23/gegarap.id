@@ -4,6 +4,12 @@ const nextConfig = {
   // Next 14.2 this is still behind an experimental flag (default from 15).
   experimental: {
     instrumentationHook: true,
+    // firebase-admin (and its transitive deps) must NOT be webpack-bundled, or a
+    // pure-ESM transitive dep gets require()'d in the Vercel serverless runtime
+    // and throws ERR_REQUIRE_ESM. Externalizing leaves it as a native node
+    // require from node_modules (nft traces it into the lambda). Fixes every
+    // server route that touches Firebase Admin (auth/session/providers/etc.).
+    serverComponentsExternalPackages: ['firebase-admin'],
   },
 };
 
