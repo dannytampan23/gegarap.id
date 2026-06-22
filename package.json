@@ -5,6 +5,9 @@
   "engines": {
     "node": "22.x"
   },
+  "overrides": {
+    "jose": "^5.9.6"
+  },
   "scripts": {
     "dev": "concurrently -n emulators,next -c magenta,cyan \"npm:dev:emulators\" \"next dev\"",
     "dev:emulators": "node scripts/dev-emulators.mjs",
