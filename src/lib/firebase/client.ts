@@ -7,11 +7,17 @@ import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
  * context. Only the public `NEXT_PUBLIC_*` config is needed — these values are
  * safe to ship to the client (access is governed by Firestore security rules,
  * not by hiding the apiKey).
+ *
+ * The values are hardcoded as fallbacks because they are public and identical
+ * across every environment, and because they must be present at BUILD time
+ * (NEXT_PUBLIC_* are inlined, and the auth pages prerender `getAuth()` — a
+ * missing key crashes the build with auth/invalid-api-key). An env var, if set,
+ * still wins, so a different Firebase project can be used without code changes.
  */
 const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 'AIzaSyAXDLfO3XFwwy1ST4n4DAWktrA5ftNhz5s',
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || 'gegarap.firebaseapp.com',
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'gegarap',
 };
 
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
