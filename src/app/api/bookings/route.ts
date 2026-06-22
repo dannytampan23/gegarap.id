@@ -64,7 +64,10 @@ export async function POST(req: Request) {
     // 5. Build the Snap token first (using a pre-generated job id) so we never
     //    persist a booking whose payment couldn't be created.
     const jobId = randomUUID();
-    const orderId = `GGR-${jobId}-${Date.now()}`;
+    // Midtrans caps order_id at 50 chars. "GGR-" + uuid(36) + "-" + base36 ms
+    // timestamp(~8) = ~49, leaving the full job id traceable while staying under
+    // the limit (a plain ms timestamp pushed it to 54 and Midtrans rejected it).
+    const orderId = `GGR-${jobId}-${Date.now().toString(36)}`;
     const snap = await createSnapToken({
       orderId,
       amount: fin.dpAmount,
