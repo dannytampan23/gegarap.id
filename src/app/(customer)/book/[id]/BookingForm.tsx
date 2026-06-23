@@ -14,6 +14,7 @@ import { useToast } from '@/components/ui/Toast';
 import { calculateBookingFinancials, type FeeRule } from '@/lib/calculations';
 import { formatCurrency } from '@/lib/utils';
 import { bookingSchema, fieldErrors, DISTRICTS, TIME_SLOTS } from '@/lib/validations';
+import { updateWhatsapp } from '@/app/actions/profile';
 
 interface BookingFormProps {
   provider: {
@@ -39,11 +40,23 @@ function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+/** Group local WA digits, e.g. 812-3456-7890. */
+function formatLocalWa(d: string): string {
+  return d.match(/.{1,4}/g)?.join('-') ?? d;
+}
+/** Strip to national digits: drop non-digits, a leading 62, and a leading 0. */
+function toLocalWaDigits(raw: string): string {
+  let d = raw.replace(/\D/g, '');
+  if (d.startsWith('62')) d = d.slice(2);
+  if (d.startsWith('0')) d = d.slice(1);
+  return d.slice(0, 13);
+}
+
 export default function BookingForm({ provider, feeRule }: BookingFormProps) {
   const router = useRouter();
   const pathname = usePathname();
   const toast = useToast();
-  const { data: session, status } = useSession();
+  const { data: session, status, update: refreshSession } = useSession();
 
   const [form, setForm] = React.useState({
     description: '',
@@ -53,8 +66,13 @@ export default function BookingForm({ provider, feeRule }: BookingFormProps) {
     timeSlot: TIME_SLOTS[0] as string,
     estimatedDays: 1,
   });
+  const [wa, setWa] = React.useState(''); // national digits, for accounts (e.g. Google) without a WA yet
   const [errors, setErrors] = React.useState<Record<string, string>>({});
   const [submitting, setSubmitting] = React.useState(false);
+
+  // Google sign-ups have no WhatsApp number; collect it inline here instead of
+  // dead-ending the booking with a "go to dashboard" message.
+  const needsWa = status === 'authenticated' && !session?.user?.phone;
 
   // /book is middleware-guarded, but guard on the client too for safety.
   React.useEffect(() => {
@@ -101,6 +119,25 @@ export default function BookingForm({ provider, feeRule }: BookingFormProps) {
       setErrors(fieldErrors(parsed.error));
       toast.error('Periksa kembali isian Anda', 'Beberapa kolom belum benar.');
       return;
+    }
+
+    // No WhatsApp on file yet (typical for Google sign-ups) → require + save it
+    // inline before booking, so the provider has a way to reach the customer.
+    if (needsWa) {
+      if (!wa) {
+        setErrors((p) => ({ ...p, whatsapp: 'Nomor WhatsApp wajib diisi.' }));
+        toast.error('Lengkapi nomor WhatsApp', 'Tukang memakainya untuk menghubungi Anda.');
+        return;
+      }
+      setSubmitting(true);
+      const waRes = await updateWhatsapp(wa);
+      if (!waRes.ok) {
+        setErrors((p) => ({ ...p, whatsapp: waRes.error }));
+        toast.error('Nomor WhatsApp belum benar', waRes.error);
+        setSubmitting(false);
+        return;
+      }
+      await refreshSession(); // refresh session so it now carries the phone
     }
 
     setSubmitting(true);
@@ -158,6 +195,41 @@ export default function BookingForm({ provider, feeRule }: BookingFormProps) {
         </div>
 
         <div className="space-y-5">
+          {needsWa && (
+            <Field
+              label="Nomor WhatsApp"
+              required
+              error={errors.whatsapp}
+              hint="Tukang memakai nomor ini untuk menghubungi Anda soal pesanan."
+            >
+              <div
+                className={
+                  'flex items-stretch overflow-hidden rounded-xl border bg-card shadow-soft transition-all focus-within:ring-4 focus-within:ring-primary/10 ' +
+                  (errors.whatsapp
+                    ? 'border-red-400 focus-within:border-red-500'
+                    : 'border-border focus-within:border-primary/50')
+                }
+              >
+                <span className="flex items-center border-r border-border bg-muted/40 px-3.5 text-sm font-semibold text-muted-foreground">
+                  +62
+                </span>
+                <input
+                  type="tel"
+                  inputMode="numeric"
+                  autoComplete="tel-national"
+                  aria-label="Nomor WhatsApp"
+                  value={formatLocalWa(wa)}
+                  onChange={(e) => {
+                    setWa(toLocalWaDigits(e.target.value));
+                    setErrors((p) => (p.whatsapp ? { ...p, whatsapp: '' } : p));
+                  }}
+                  placeholder="812-3456-7890"
+                  className="h-11 w-full bg-transparent px-3.5 text-sm text-foreground outline-none placeholder:text-muted-foreground/70"
+                />
+              </div>
+            </Field>
+          )}
+
           <Field label="Deskripsi Pekerjaan" required error={errors.description}>
             <Textarea
               value={form.description}
