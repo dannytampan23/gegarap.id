@@ -65,6 +65,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   React.useEffect(() => {
     return onAuthStateChanged(auth, async (u) => {
       setFbUser(u);
+      // Keep the httpOnly server session cookie in sync with the client session.
+      // Without this, a client that's still signed in (Firebase persists auth in
+      // IndexedDB and auto-refreshes) but whose server cookie expired/was cleared
+      // hits 401 on server routes (KTP upload, bookings, dashboard). Re-posting
+      // the fresh ID token re-mints the cookie so client and server never drift.
+      if (u) {
+        try {
+          const idToken = await u.getIdToken();
+          await fetch('/api/auth/session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ idToken }),
+          });
+        } catch {
+          /* best-effort; explicit login flow also establishes the cookie */
+        }
+      }
       await loadProfile(u);
       setStatus(u ? 'authenticated' : 'unauthenticated');
     });
