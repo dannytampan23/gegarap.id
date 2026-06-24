@@ -11,13 +11,12 @@ import {
 } from 'lucide-react';
 import prisma from '@/lib/prisma';
 import { buttonVariants } from '@/components/ui/Button';
-import MapWrapper from '@/components/map/MapWrapper';
-import { PROVIDER_MAP_SELECT, toMapProvider } from '@/lib/providers';
+import WorkerMap from '@/components/map/WorkerMap';
 import { JsonLd } from '@/components/seo/JsonLd';
 import { localBusinessJsonLd } from '@/lib/seo';
 import { Reveal } from '@/components/motion/Reveal';
-import { CountUp } from '@/components/motion/CountUp';
 import { CategoryGrid } from '@/components/home/CategoryGrid';
+import { StatsSection } from '@/components/home/StatsSection';
 import { Hero3D } from '@/components/sections/Hero3D';
 
 export const dynamic = 'force-dynamic';
@@ -59,19 +58,13 @@ const steps = [
 ];
 
 export default async function MarketingHome() {
-  // Public-safe columns only; coordinates are fuzzed before reaching the map.
+  // Only rating fields are needed here now — the stats band and the map both
+  // fetch their own data client-side (/api/stats, /api/workers). This query just
+  // feeds the LocalBusiness structured-data aggregate rating.
   const providers = await prisma.providerProfile.findMany({
     where: { isVerified: true, available: true },
-    select: {
-      ...PROVIDER_MAP_SELECT,
-      rating: true,
-      ratingCount: true,
-      completedJobs: true,
-    },
-    orderBy: { rating: 'desc' },
+    select: { rating: true, ratingCount: true },
   });
-
-  const mapProviders = providers.map(toMapProvider);
 
   const count = providers.length;
   const totalReviews = providers.reduce((s, p) => s + p.ratingCount, 0);
@@ -82,7 +75,6 @@ export default async function MarketingHome() {
       : count > 0
         ? providers.reduce((s, p) => s + p.rating, 0) / count
         : 0;
-  const totalJobs = providers.reduce((s, p) => s + p.completedJobs, 0);
 
   return (
     <div className="overflow-hidden">
@@ -91,26 +83,8 @@ export default async function MarketingHome() {
       {/* ===== Hero (3D + smart search) ===== */}
       <Hero3D />
 
-      {/* ===== Stats ===== */}
-      <section className="container -mt-6">
-        <Reveal className="grid grid-cols-3 gap-3 rounded-3xl border border-border bg-card p-6 shadow-card sm:gap-6 sm:p-8">
-          {[
-            { value: count, decimals: 0, suffix: '+', label: 'Tukang terverifikasi' },
-            { value: avgRating, decimals: 1, suffix: '', label: 'Rating rata-rata' },
-            { value: totalJobs, decimals: 0, suffix: '+', label: 'Pekerjaan selesai' },
-          ].map((s) => (
-            <div key={s.label} className="text-center">
-              <CountUp
-                value={s.value}
-                decimals={s.decimals}
-                suffix={s.suffix}
-                className="text-2xl font-extrabold tracking-tight text-foreground sm:text-4xl"
-              />
-              <p className="mt-1 text-xs text-muted-foreground sm:text-sm">{s.label}</p>
-            </div>
-          ))}
-        </Reveal>
-      </section>
+      {/* ===== Stats (self-fetching; hides itself on zero/error) ===== */}
+      <StatsSection />
 
       {/* ===== Categories ===== */}
       <CategoryGrid />
@@ -195,7 +169,7 @@ export default async function MarketingHome() {
             Live di Yogyakarta
           </span>
         </div>
-        <MapWrapper providers={mapProviders} />
+        <WorkerMap />
       </section>
 
       {/* ===== CTA band ===== */}

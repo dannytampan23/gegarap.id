@@ -89,6 +89,64 @@ export const onboardingSchema = z.object({
 
 export type OnboardingInput = z.infer<typeof onboardingSchema>;
 
+/**
+ * Full provider KYC onboarding (the 5-step wizard). Superset of the simple
+ * onboarding above. `nik` and the document paths are sensitive PII — they are
+ * stored server-side only and never appear in PROVIDER_PUBLIC_SELECT.
+ *
+ * Note: `dailyRate` is not one of the spec's listed step fields, but the schema
+ * requires a rate for a provider to be bookable, so it is collected in step 2.
+ */
+export const kycOnboardingSchema = z.object({
+  // Step 1 — Data Diri
+  name: z.string().trim().min(2, 'Nama minimal 2 karakter').max(80),
+  nik: z.string().trim().regex(/^\d{16}$/, 'NIK harus tepat 16 digit angka'),
+  ktpImageUrl: z.string().trim().min(1, 'Upload foto KTP terlebih dahulu').max(300),
+  // Step 2 — Keahlian
+  categories: z
+    .array(z.enum(PROVIDER_CATEGORIES))
+    .min(1, 'Pilih minimal 1 keahlian')
+    .max(5, 'Maksimal 5 keahlian'),
+  experienceYears: z.coerce
+    .number()
+    .int('Masukkan angka bulat')
+    .min(0, 'Tidak boleh negatif')
+    .max(60, 'Maksimal 60 tahun'),
+  dailyRate: z.coerce
+    .number()
+    .min(50_000, 'Tarif minimal Rp 50.000')
+    .max(5_000_000, 'Tarif maksimal Rp 5.000.000'),
+  // Step 3 — Lokasi
+  districts: z
+    .array(z.string().trim().min(1))
+    .min(1, 'Pilih minimal 1 kecamatan')
+    .max(5, 'Maksimal 5 kecamatan'),
+  serviceRadiusKm: z.coerce
+    .number()
+    .int('Masukkan angka bulat')
+    .min(1, 'Minimal 1 km')
+    .max(50, 'Maksimal 50 km'),
+  // Step 4 — Dokumen
+  faceImageUrl: z.string().trim().min(1, 'Upload foto wajah terlebih dahulu').max(300),
+  certificateUrl: z.string().trim().min(1).max(300).optional(),
+});
+
+export type KycOnboardingInput = z.infer<typeof kycOnboardingSchema>;
+
+/**
+ * Per-step validators, indexed by zero-based step. Step 5 (Review) has no fields
+ * of its own — it only gates on the consent checkbox, handled in the form. The
+ * wizard runs the matching schema before allowing "Lanjut".
+ */
+export const kycStepSchemas = [
+  kycOnboardingSchema.pick({ name: true, nik: true, ktpImageUrl: true }),
+  kycOnboardingSchema.pick({ categories: true, experienceYears: true, dailyRate: true }),
+  kycOnboardingSchema.pick({ districts: true, serviceRadiusKm: true }),
+  kycOnboardingSchema.pick({ faceImageUrl: true, certificateUrl: true }),
+] as const;
+
+export const KYC_STEP_COUNT = 5;
+
 export const contactSchema = z.object({
   name: z.string().trim().min(2, 'Nama minimal 2 karakter').max(80),
   phone: phoneSchema,

@@ -66,6 +66,37 @@ export async function uploadKtp(params: {
   return { path };
 }
 
+/** Document kinds the onboarding wizard can upload into the private bucket. */
+export type PrivateDocKind = 'ktp' | 'face' | 'certificate';
+
+/**
+ * Generic sibling of {@link uploadKtp} for the KYC wizard's other documents
+ * (face photo, optional certificate). Same private-bucket, unguessable-key,
+ * path-not-URL contract — these are also sensitive and resolved to signed URLs
+ * only for admin review.
+ */
+export async function uploadPrivateDocument(params: {
+  userId: string;
+  kind: PrivateDocKind;
+  buffer: Buffer;
+  contentType: string;
+  ext: string;
+}): Promise<{ path: string }> {
+  const path = `${params.kind}/${userSegment(params.userId)}/${randomUUID()}.${params.ext}`;
+
+  if (!isStorageConfigured) {
+    if (process.env.NODE_ENV !== 'production') return { path: `${DEV_PLACEHOLDER_PATH}-${params.kind}` };
+    throw new Error('Penyimpanan dokumen belum dikonfigurasi (SUPABASE_SERVICE_ROLE_KEY kosong).');
+  }
+
+  const { error } = await admin()
+    .storage.from(SUPABASE_BUCKET)
+    .upload(path, params.buffer, { contentType: params.contentType, upsert: false });
+  if (error) throw new Error(`Upload dokumen gagal: ${error.message}`);
+
+  return { path };
+}
+
 /**
  * Mint a short-lived signed URL for a private KTP object. Intended only for
  * authenticated admins doing KYC review; the link expires in 2 minutes. Returns

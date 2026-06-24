@@ -1,6 +1,6 @@
 import { pageMetadata } from '@/lib/seo';
 import { ShieldCheck, TrendingUp, Users } from 'lucide-react';
-import OnboardingForm from './OnboardingForm';
+import StepForm from '@/components/onboarding/StepForm';
 
 export const metadata = pageMetadata({
   title: 'Daftar sebagai Tukang',
@@ -43,7 +43,7 @@ export default function OnboardingPage() {
           ))}
         </div>
 
-        <OnboardingForm />
+        <StepForm />
       </div>
     </div>
   );

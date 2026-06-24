@@ -43,7 +43,8 @@ model OtpToken {
 model ProviderProfile {
   id            String   @id @default(uuid())
   userId        String   @unique
-  category      String
+  category      String // kategori utama (= categories[0], dipertahankan utk kueri lama)
+  categories    String[] @default([]) // semua keahlian (multi-select onboarding KYC)
   districts     String[] @default([]) // kecamatan operasional, maks 5
   dailyRate     Int // tarif/hari dalam Rupiah utuh (integer minor-unit)
   goPayNumber   String?
@@ -54,6 +55,14 @@ model ProviderProfile {
   bio           String?
   avatarUrl     String?
   ktpImageUrl   String? // PATH objek KTP di private bucket (bukan URL publik)
+
+  // ─ KYC onboarding (wizard 5 langkah) ─ semua disimpan server-side saja, tidak
+  // pernah masuk PROVIDER_PUBLIC_SELECT. `nik` & dokumen = PII sensitif.
+  nik             String? // 16 digit; PII — JANGAN expose ke klien publik
+  experienceYears Int? // lama pengalaman (tahun)
+  serviceRadiusKm Int? // radius layanan dari titik provider (km)
+  faceImageUrl    String? // PATH foto wajah di private bucket (verifikasi liveness KYC)
+  certificateUrl  String? // PATH sertifikat opsional di private bucket
 
   // KYC review state
   kycStatus    String    @default("PENDING") // PENDING | APPROVED | REJECTED
