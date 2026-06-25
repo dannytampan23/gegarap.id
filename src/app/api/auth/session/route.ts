@@ -28,7 +28,6 @@ export async function POST(req: Request) {
         uid: decoded.uid,
         email: decoded.email ?? '',
         name: decoded.name ?? null,
-        picture: decoded.picture ?? null,
         authProvider: decoded.firebase?.sign_in_provider === 'password' ? 'password' : 'google',
       })
     );

@@ -74,12 +74,17 @@ export async function getSession(): Promise<AppSession | null> {
  *
  * The Postgres row is keyed by the Firebase uid so the relational graph (Job,
  * Payment, Review → User.id) keeps working. Existing fields are never clobbered.
+ *
+ * The Firestore doc is intentionally MINIMAL — it's only the server-side login
+ * index for resolve-identifier (WA number → email/authProvider). Domain identity
+ * (role, name, phone) lives in Postgres and is read by the client via /api/me, so
+ * we deliberately do NOT copy `role` here (it would drift the moment an admin
+ * changes a role in Postgres).
  */
 export async function ensureUserRecord(input: {
   uid: string;
   email: string;
   name?: string | null;
-  picture?: string | null;
   authProvider?: 'password' | 'google';
 }) {
   const user = await prisma.user.upsert({
@@ -96,11 +101,8 @@ export async function ensureUserRecord(input: {
   const snap = await ref.get();
   if (!snap.exists) {
     await ref.set({
-      name: user.name,
       email: user.email,
       whatsapp: user.phone ?? null,
-      photoURL: input.picture ?? null,
-      role: user.role,
       authProvider: input.authProvider ?? 'google',
       createdAt: FieldValue.serverTimestamp(),
     });

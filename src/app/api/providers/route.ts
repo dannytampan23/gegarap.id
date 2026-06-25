@@ -11,7 +11,7 @@ export async function GET(req: Request) {
   return handle(async () => {
     // Basic abuse protection on a public, unauthenticated endpoint.
     const ip = clientIp(req);
-    const limit = rateLimit(`providers:${ip}`, { windowMs: 60_000, max: 30 });
+    const limit = await rateLimit(`providers:${ip}`, { windowMs: 60_000, max: 30 });
     if (!limit.ok) {
       // Persistent breaches = likely scraping the provider directory (Bagian 8/9).
       if (recordRateLimitBreach(`providers-breach:${ip}`)) {

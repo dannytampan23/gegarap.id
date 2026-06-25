@@ -6,12 +6,14 @@
  * for dispatch; transition call sites just call `notifyPaymentStatus(...)`
  * instead of hand-rolling messages, so the wording lives in one place.
  *
- * It is best-effort: it loads its own data, never throws, and a delivery failure
- * is logged (Bagian 10) but never breaks the transaction that triggered it.
+ * It is best-effort: it loads its own data, never throws, and delivery is
+ * deferred to the outbox (Bagian 10) so a slow/failing gateway never blocks or
+ * breaks the transaction that triggered it. The cron dispatcher does the actual
+ * WhatsApp send + retries.
  */
 
 import prisma from './prisma';
-import { sendWAMessage } from './whatsapp';
+import { enqueueWhatsApp } from './outbox';
 import { logEvent } from './logger';
 import type { PaymentStatus } from './payment-state';
 
@@ -150,18 +152,23 @@ export async function notifyPaymentStatus(
       extra,
     };
 
+    // Enqueue (don't send) — the outbox dispatcher delivers + retries. The
+    // dedupeKey makes a re-fired transition (e.g. a webhook retry) idempotent.
     const tasks: Promise<unknown>[] = [];
     if (copy.customer && job.customer.phone) {
-      tasks.push(sendWAMessage(job.customer.phone, copy.customer(ctx)));
+      tasks.push(
+        enqueueWhatsApp(job.customer.phone, copy.customer(ctx), `pay:${paymentId}:${status}:customer`)
+      );
     }
     if (copy.provider && job.provider.user.phone) {
-      tasks.push(sendWAMessage(job.provider.user.phone, copy.provider(ctx)));
+      tasks.push(
+        enqueueWhatsApp(job.provider.user.phone, copy.provider(ctx), `pay:${paymentId}:${status}:provider`)
+      );
     }
     if (tasks.length === 0) return;
 
-    const results = await Promise.allSettled(tasks);
-    const delivered = results.filter((r) => r.status === 'fulfilled' && r.value === true).length;
-    logEvent('notification.sent', { paymentId, status, attempted: tasks.length, delivered });
+    await Promise.all(tasks);
+    logEvent('notification.enqueued', { paymentId, status, queued: tasks.length });
   } catch (err) {
     logEvent('notification.failed', { paymentId, status, error: String(err) }, 'warn');
   }

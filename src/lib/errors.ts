@@ -32,6 +32,26 @@ export class NotFoundError extends Error {
   }
 }
 
+/** A precondition on the request itself failed (missing field, bad input state). */
+export class BadRequestError extends Error {
+  readonly code = 'BAD_REQUEST';
+  readonly httpStatus = 400;
+  constructor(message = 'Permintaan tidak valid.') {
+    super(message);
+    this.name = 'BadRequestError';
+  }
+}
+
+/** The caller is being throttled (abuse/velocity guard). */
+export class RateLimitedError extends Error {
+  readonly code = 'RATE_LIMITED';
+  readonly httpStatus = 429;
+  constructor(message = 'Terlalu banyak permintaan. Coba lagi nanti.') {
+    super(message);
+    this.name = 'RateLimitedError';
+  }
+}
+
 /** Any error carrying an httpStatus this layer knows how to surface. */
 export interface HttpAwareError extends Error {
   httpStatus: number;

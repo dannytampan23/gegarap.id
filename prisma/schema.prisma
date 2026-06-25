@@ -7,15 +7,15 @@ datasource db {
 }
 
 // ─── USER ─────────────────────────────────────────────────────────────────
-// Auth identity. Customers and providers are both Users; a provider also has a
-// linked ProviderProfile. `phone` is the canonical WhatsApp OTP login identity
-// (format 628xxxxxxxxxx); `phoneNumber` is the legacy free-form contact field.
+// Domain identity mirror of the Firebase Auth user (User.id == Firebase uid).
+// Login/credentials live in Firebase; this row is the authoritative source for
+// `role` and the canonical WhatsApp number `phone` (format 628xxxxxxxxxx) used
+// for booking contact + notifications. `phoneNumber` is a legacy free-form field.
 model User {
   id              String           @id @default(uuid())
   name            String
   email           String           @unique
   phone           String?          @unique
-  passwordHash    String?
   phoneNumber     String?
   role            String           @default("CUSTOMER")
   createdAt       DateTime         @default(now())
@@ -26,17 +26,25 @@ model User {
   providerProfile ProviderProfile?
 }
 
-// ─── OTP TOKEN ────────────────────────────────────────────────────────────
-model OtpToken {
-  id        String   @id @default(uuid())
-  phone     String // format kanonik: 628xxxxxxxxxx
-  code      String
-  expiresAt DateTime
-  used      Boolean  @default(false)
-  attempts  Int      @default(0) // maks 5 percobaan salah lalu invalidasi
-  createdAt DateTime @default(now())
+// ─── OUTBOX MESSAGE ───────────────────────────────────────────────────────
+// Transactional outbox for outbound notifications. Request handlers ENQUEUE a
+// row (a fast local INSERT) instead of awaiting a slow external WhatsApp call,
+// so a gateway hiccup never blocks or fails the business transaction. A cron
+// dispatcher (`/api/cron/dispatch-outbox`) delivers PENDING rows and retries
+// failures up to OUTBOX_MAX_ATTEMPTS before parking them as FAILED.
+model OutboxMessage {
+  id        String    @id @default(uuid())
+  channel   String    @default("WHATSAPP") // WHATSAPP (future: EMAIL, PUSH)
+  toAddress String // recipient — WA number 628xxxxxxxxxx
+  body      String // rendered message text
+  status    String    @default("PENDING") // PENDING | SENT | FAILED
+  attempts  Int       @default(0)
+  lastError String?
+  dedupeKey String?   @unique // optional idempotency guard for retried transitions
+  createdAt DateTime  @default(now())
+  sentAt    DateTime?
 
-  @@index([phone])
+  @@index([status, createdAt])
 }
 
 // ─── PROVIDER PROFILE ─────────────────────────────────────────────────────

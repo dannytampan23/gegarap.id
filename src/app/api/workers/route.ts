@@ -47,7 +47,7 @@ function parseNum(v: string | null): number | null {
 export async function GET(req: Request) {
   // Same abuse protection as /api/providers — this is a public directory feed.
   const ip = clientIp(req);
-  const limit = rateLimit(`workers:${ip}`, { windowMs: 60_000, max: 30 });
+  const limit = await rateLimit(`workers:${ip}`, { windowMs: 60_000, max: 30 });
   if (!limit.ok) {
     if (recordRateLimitBreach(`workers-breach:${ip}`)) {
       logAlert('SEARCH_SCRAPING_SUSPECTED', { ip });

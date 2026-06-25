@@ -2,8 +2,7 @@
 
 import * as React from 'react';
 import { onAuthStateChanged, signOut as firebaseSignOut, type User as FbUser } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
-import { auth, db } from '@/lib/firebase/client';
+import { auth } from '@/lib/firebase/client';
 
 export interface SessionUser {
   id: string;
@@ -23,10 +22,11 @@ interface SessionShape {
   update: () => Promise<void>;
 }
 
-interface FirestoreProfile {
+/** Identity as returned by /api/me — sourced from Postgres (authoritative). */
+interface MeProfile {
   name?: string | null;
-  whatsapp?: string | null;
-  photoURL?: string | null;
+  phone?: string | null;
+  image?: string | null;
   role?: string;
 }
 
@@ -39,14 +39,15 @@ const SessionContext = React.createContext<SessionShape>({
 /**
  * Client auth context backed by Firebase Auth. Exposes a `useSession()` hook
  * shaped like the old NextAuth one so existing components only swap the import.
- * `role`/`whatsapp` come from the user's own Firestore profile doc (readable
- * under the security rules); they drive UI only — the server re-checks for RBAC.
+ * `role`/`phone`/`name` come from /api/me — i.e. Postgres, the single source of
+ * truth — so the client never shows a stale Firestore copy of the role. They
+ * drive UI only; the server independently re-checks for RBAC.
  *
  * Mounted once in the root layout (replaces NextAuth's SessionProvider).
  */
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [fbUser, setFbUser] = React.useState<FbUser | null>(null);
-  const [profile, setProfile] = React.useState<FirestoreProfile | null>(null);
+  const [profile, setProfile] = React.useState<MeProfile | null>(null);
   const [status, setStatus] = React.useState<Status>('loading');
 
   const loadProfile = React.useCallback(async (u: FbUser | null) => {
@@ -55,8 +56,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     try {
-      const snap = await getDoc(doc(db, 'users', u.uid));
-      setProfile(snap.exists() ? (snap.data() as FirestoreProfile) : null);
+      const res = await fetch('/api/me', { cache: 'no-store' });
+      if (!res.ok) {
+        setProfile(null);
+        return;
+      }
+      const json = (await res.json()) as { user?: MeProfile | null };
+      setProfile(json.user ?? null);
     } catch {
       setProfile(null);
     }
@@ -99,8 +105,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               id: fbUser.uid,
               name: profile?.name ?? fbUser.displayName,
               email: fbUser.email,
-              image: profile?.photoURL ?? fbUser.photoURL,
-              phone: profile?.whatsapp ?? null,
+              image: profile?.image ?? fbUser.photoURL,
+              phone: profile?.phone ?? null,
               role: profile?.role,
             },
           }

@@ -1,13 +1,14 @@
 import { z } from 'zod';
-// Import the phone helpers from whatsapp.ts (their actual home) — NOT from
-// otp.ts, which pulls in Prisma/pg and would leak node built-ins into the
-// client bundle (validations is imported by client forms).
-import { normalizePhone, isValidIndonesianPhone } from './whatsapp';
+// Import the phone helpers from whatsapp.ts (their actual home), which is a pure
+// transport/helper module with no Prisma/pg imports — safe for the client bundle
+// (this module is imported by client forms).
+import { normalizePhone, isValidIndonesianPhone } from '../whatsapp';
 
 /**
  * Single source of truth for phone validation. Always normalises to the
- * canonical `628xxxxxxxxxx` form used everywhere else (OTP, User.phone), so the
- * old `^0[0-9]...` regex that never matched stored data is gone for good.
+ * canonical `628xxxxxxxxxx` form used everywhere else (User.phone, WA
+ * notifications), so the old `^0[0-9]...` regex that never matched stored data
+ * is gone for good.
  */
 export const phoneSchema = z
   .string()

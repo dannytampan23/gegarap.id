@@ -2,7 +2,7 @@ import prisma from '@/lib/prisma';
 import { ok, fail, handle } from '@/lib/api';
 import { requireAdmin } from '@/lib/admin-guard';
 import { recordAudit, AuditAction } from '@/lib/audit';
-import { sendWAMessage } from '@/lib/whatsapp';
+import { enqueueWhatsApp } from '@/lib/outbox';
 
 /** POST /api/admin/providers/:id/approve — pass KYC; provider goes live. */
 export async function POST(_req: Request, { params }: { params: { id: string } }) {
@@ -35,14 +35,15 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
       metadata: { name: profile.user.name, category: profile.category },
     });
 
-    // Tell the provider they're live (best-effort).
+    // Tell the provider they're live (best-effort, via the outbox).
     if (profile.user.phone) {
-      await sendWAMessage(
+      await enqueueWhatsApp(
         profile.user.phone,
         `✅ *Verifikasi KYC Disetujui!*\n\n` +
           `Selamat ${profile.user.name}, profil tukang Anda di gegarap.id sudah aktif dan ` +
           `tampil di marketplace. Anda kini bisa menerima pekerjaan. 🔧\n\n` +
-          `Cek dashboard: ${process.env.APP_URL ?? ''}/provider/dashboard`
+          `Cek dashboard: ${process.env.APP_URL ?? ''}/provider/dashboard`,
+        `kyc:${profile.id}:approved`
       );
     }
 

@@ -6,7 +6,7 @@ import { transitionPayment, InvalidTransitionError, type PaymentStatus } from '@
 import { releaseAndSettle } from '@/lib/payout';
 import { recordAudit, AuditAction } from '@/lib/audit';
 import { refundViaGateway } from '@/lib/midtrans';
-import { sendWAMessage } from '@/lib/whatsapp';
+import { enqueueWhatsApp } from '@/lib/outbox';
 import { logEvent } from '@/lib/logger';
 
 const resolveSchema = z.object({
@@ -56,8 +56,10 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       await transitionPayment({ paymentId: payment.id, to, triggeredBy: adminId, reason });
     }
 
+    // Enqueue to the outbox (the PENDING_REVIEW guard above prevents a refund
+    // from being resolved — and thus notified — twice, so no dedupeKey needed).
     const notify = async (phone: string | null | undefined, msg: string) => {
-      if (phone) await sendWAMessage(phone, msg);
+      if (phone) await enqueueWhatsApp(phone, msg);
     };
 
     try {
