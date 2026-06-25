@@ -17,6 +17,8 @@ import { localBusinessJsonLd } from '@/lib/seo';
 import { Reveal } from '@/components/motion/Reveal';
 import { CategoryGrid } from '@/components/home/CategoryGrid';
 import { StatsSection } from '@/components/home/StatsSection';
+import { TrustBar } from '@/components/home/TrustBar';
+import { TestimonialSection } from '@/components/home/TestimonialSection';
 import { Hero3D } from '@/components/sections/Hero3D';
 
 export const dynamic = 'force-dynamic';
@@ -82,6 +84,9 @@ export default async function MarketingHome() {
 
       {/* ===== Hero (3D + smart search) ===== */}
       <Hero3D />
+
+      {/* ===== Trust badges (first thing a new visitor reads) ===== */}
+      <TrustBar />
 
       {/* ===== Stats (self-fetching; hides itself on zero/error) ===== */}
       <StatsSection />
@@ -171,6 +176,9 @@ export default async function MarketingHome() {
         </div>
         <WorkerMap />
       </section>
+
+      {/* ===== Testimonials (social proof) ===== */}
+      <TestimonialSection />
 
       {/* ===== CTA band ===== */}
       <section className="container pb-20">

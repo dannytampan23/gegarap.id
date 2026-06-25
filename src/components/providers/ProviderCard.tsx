@@ -1,28 +1,48 @@
 import Link from 'next/link';
-import { MapPin, CheckCircle2, ArrowRight } from 'lucide-react';
+import { MapPin, BadgeCheck, ArrowRight, Briefcase } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { Avatar } from '@/components/ui/Avatar';
 import { Rating } from '@/components/ui/Rating';
 import { buttonVariants } from '@/components/ui/Button';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, cn } from '@/lib/utils';
 import type { ProviderListItem } from '@/lib/types';
+import { ProviderAvatar } from './ProviderAvatar';
 
 export function ProviderCard({ provider }: { provider: ProviderListItem }) {
+  const areaLabel =
+    provider.districts.length > 0
+      ? `${provider.districts[0]}${
+          provider.districts.length > 1 ? ` +${provider.districts.length - 1}` : ''
+        } · DIY`
+      : 'DIY';
+
   return (
-    <Card className="group flex flex-col p-6 transition-all duration-300 hover:-translate-y-1 hover:border-primary/30 hover:shadow-elevated">
+    <Card className="group flex h-full flex-col p-6 transition-all duration-300 hover:-translate-y-1 hover:border-primary/30 hover:shadow-elevated">
       <div className="flex items-start gap-4">
-        <Avatar name={provider.user.name} size="lg" />
+        <ProviderAvatar
+          name={provider.user.name}
+          src={provider.avatarUrl}
+          available={provider.available}
+          size="lg"
+        />
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5">
-            <h3 className="truncate text-lg font-bold tracking-tight text-foreground">
-              {provider.user.name}
-            </h3>
-            <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" aria-label="Terverifikasi" />
+          <h3 className="truncate text-lg font-bold tracking-tight text-foreground">
+            {provider.user.name}
+          </h3>
+          <span
+            className="mt-0.5 inline-flex items-center gap-1 text-xs font-semibold text-primary"
+            title="Tukang ini telah melewati verifikasi KYC gegarap.id"
+          >
+            <BadgeCheck className="h-3.5 w-3.5" />
+            Terverifikasi
+          </span>
+          <div className="mt-1.5">
+            <Badge variant="primary">{provider.category}</Badge>
           </div>
-          <Badge variant="primary" className="mt-1.5">
-            {provider.category}
-          </Badge>
+          <p className="mt-1.5 flex items-center gap-1 text-sm text-muted-foreground">
+            <MapPin className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">{areaLabel}</span>
+          </p>
         </div>
       </div>
 
@@ -32,13 +52,28 @@ export function ProviderCard({ provider }: { provider: ProviderListItem }) {
         </p>
       )}
 
-      <div className="mt-4 flex items-center gap-4 text-sm">
+      <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
         <Rating value={provider.rating} count={provider.ratingCount} />
         <span className="flex items-center gap-1 text-muted-foreground">
-          <MapPin className="h-3.5 w-3.5" />
+          <Briefcase className="h-3.5 w-3.5" />
           {provider.completedJobs}+ pekerjaan
         </span>
       </div>
+
+      <p
+        className={cn(
+          'mt-3 inline-flex items-center gap-1.5 text-xs font-semibold',
+          provider.available ? 'text-primary' : 'text-muted-foreground'
+        )}
+      >
+        <span
+          className={cn(
+            'h-1.5 w-1.5 rounded-full',
+            provider.available ? 'bg-primary' : 'bg-muted-foreground/50'
+          )}
+        />
+        {provider.available ? 'Tersedia hari ini' : 'Jadwal penuh'}
+      </p>
 
       <div className="mt-5 flex items-end justify-between border-t border-border pt-5">
         <div>

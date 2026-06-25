@@ -133,6 +133,48 @@
     mask-image: radial-gradient(ellipse 70% 60% at 50% 0%, #000 60%, transparent 100%);
   }
 
+  /* Dual-thumb range slider (SearchFilters price range). Two overlaid range
+     inputs: the input itself ignores pointer events so the track shows through;
+     only the thumbs are grabbable. */
+  .range-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    pointer-events: none;
+    background: transparent;
+  }
+  .range-thumb::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    pointer-events: auto;
+    height: 1.15rem;
+    width: 1.15rem;
+    border-radius: 9999px;
+    background: rgb(var(--primary));
+    border: 2px solid #fff;
+    box-shadow: 0 1px 4px rgb(15 23 42 / 0.25);
+    cursor: pointer;
+  }
+  .range-thumb::-moz-range-thumb {
+    pointer-events: auto;
+    height: 1.15rem;
+    width: 1.15rem;
+    border-radius: 9999px;
+    background: rgb(var(--primary));
+    border: 2px solid #fff;
+    box-shadow: 0 1px 4px rgb(15 23 42 / 0.25);
+    cursor: pointer;
+  }
+
+  /* Hide the scrollbar on horizontally-scrolling rows (TrustBar, chips, carousel)
+     while keeping the element scrollable/swipeable. */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
   .animation-delay-100 {
     animation-delay: 0.1s;
   }

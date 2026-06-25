@@ -38,12 +38,12 @@ test.describe('Search & Filter Tukang', () => {
 
   test('tanpa hasil → empty state tampil', async ({ page }) => {
     await page.getByLabel('Cari tukang').fill('xyzabc123tidakada');
-    await expect(page.getByText(/Tidak ada tukang yang cocok/i)).toBeVisible();
+    await expect(page.getByText(/Belum ada tukang di area ini/i)).toBeVisible();
   });
 
   test('hapus kata kunci → tukang muncul kembali', async ({ page }) => {
     await page.getByLabel('Cari tukang').fill('xyzabc123tidakada');
-    await expect(page.getByText(/Tidak ada tukang yang cocok/i)).toBeVisible();
+    await expect(page.getByText(/Belum ada tukang di area ini/i)).toBeVisible();
     await page.getByLabel('Cari tukang').fill('');
     await expect(cards(page).first()).toBeVisible();
   });

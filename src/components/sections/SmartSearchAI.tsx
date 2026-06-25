@@ -3,13 +3,17 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Search, TrendingUp } from 'lucide-react';
+import { Search, TrendingUp, Tag } from 'lucide-react';
 import { SearchInput } from '@/components/ui/SearchInput';
 import { useDebounce } from '@/hooks/useDebounce';
+import { CATEGORY_META } from '@/components/home/categories';
 
-// FIXED mock list (master prompt §7 — "Bongkar AC" added so the frozen example
-// actually resolves). DECISION: these are search intents, not categories; on
-// select we deep-link to the real `/search?q=` so the hero never dead-ends.
+// A suggestion is either a real service category (deep-links to the pre-filtered
+// /search?category=) or a free-text search intent (deep-links to /search?q=).
+type Suggestion = { label: string; kind: 'kategori' | 'layanan'; href: string };
+
+// FIXED service intents (master prompt §7). DECISION: these are search intents,
+// not categories; on select we deep-link to the real `/search?q=`.
 const SERVICES = [
   'Pasang AC',
   'Service AC',
@@ -23,7 +27,20 @@ const SERVICES = [
   'Renovasi Rumah',
 ] as const;
 
-const POPULAR = SERVICES.slice(0, 5);
+const SERVICE_SUGGESTIONS: Suggestion[] = SERVICES.map((label) => ({
+  label,
+  kind: 'layanan',
+  href: `/search?q=${encodeURIComponent(label)}`,
+}));
+
+// Real service categories (single source of truth shared with the landing grid).
+const CATEGORY_SUGGESTIONS: Suggestion[] = CATEGORY_META.map((c) => ({
+  label: c.name,
+  kind: 'kategori',
+  href: `/search?category=${encodeURIComponent(c.name)}`,
+}));
+
+const POPULAR = SERVICE_SUGGESTIONS.slice(0, 5);
 const EMPTY_COPY = 'Tidak ditemukan. Coba kata kunci lain.';
 const LISTBOX_ID = 'hero-search-listbox';
 
@@ -52,22 +69,26 @@ export function SmartSearchAI() {
 
   const debounced = useDebounce(query, 300);
 
-  // Filter: case-insensitive, exact-prefix matches first, then substring matches.
-  const results = React.useMemo(() => {
+  // Matching categories come first (authoritative deep-links), then service
+  // intents — prefix matches before substring matches within each group.
+  const results = React.useMemo<Suggestion[]>(() => {
     const q = debounced.trim().toLowerCase();
     if (!q) return [];
-    const prefix: string[] = [];
-    const substring: string[] = [];
-    for (const s of SERVICES) {
-      const l = s.toLowerCase();
-      if (l.startsWith(q)) prefix.push(s);
-      else if (l.includes(q)) substring.push(s);
-    }
-    return [...prefix, ...substring];
+    const rank = (items: Suggestion[]) => {
+      const prefix: Suggestion[] = [];
+      const substring: Suggestion[] = [];
+      for (const s of items) {
+        const l = s.label.toLowerCase();
+        if (l.startsWith(q)) prefix.push(s);
+        else if (l.includes(q)) substring.push(s);
+      }
+      return [...prefix, ...substring];
+    };
+    return [...rank(CATEGORY_SUGGESTIONS), ...rank(SERVICE_SUGGESTIONS)];
   }, [debounced]);
 
   const isEmptyQuery = debounced.trim() === '';
-  const items = isEmptyQuery ? [...POPULAR] : results;
+  const items = isEmptyQuery ? POPULAR : results;
   const showEmptyState = !isEmptyQuery && results.length === 0;
   const open = focused && (items.length > 0 || showEmptyState);
 
@@ -76,11 +97,11 @@ export function SmartSearchAI() {
     setHighlight(-1);
   }, [debounced]);
 
-  function select(service: string) {
-    setQuery(service);
+  function select(s: Suggestion) {
+    setQuery(s.label);
     setFocused(false);
     inputRef.current?.blur();
-    router.push(`/search?q=${encodeURIComponent(service)}`);
+    router.push(s.href);
   }
 
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
@@ -92,7 +113,12 @@ export function SmartSearchAI() {
       if (items.length) setHighlight((h) => (h <= 0 ? items.length - 1 : h - 1));
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      if (!items.length) return;
+      if (!items.length) {
+        // No suggestions but the user typed something — search it literally.
+        const q = query.trim();
+        if (q) router.push(`/search?q=${encodeURIComponent(q)}`);
+        return;
+      }
       select(items[highlight >= 0 ? highlight : 0]);
     } else if (e.key === 'Escape') {
       e.preventDefault();
@@ -116,9 +142,7 @@ export function SmartSearchAI() {
         aria-expanded={open}
         aria-controls={LISTBOX_ID}
         aria-autocomplete="list"
-        aria-activedescendant={
-          highlight >= 0 ? `hero-search-opt-${highlight}` : undefined
-        }
+        aria-activedescendant={highlight >= 0 ? `hero-search-opt-${highlight}` : undefined}
         aria-label="Cari layanan tukang"
       />
 
@@ -145,9 +169,9 @@ export function SmartSearchAI() {
               </div>
             ) : (
               <ul role="listbox" id={LISTBOX_ID} aria-label="Saran pencarian">
-                {items.map((service, i) => (
+                {items.map((s, i) => (
                   <li
-                    key={service}
+                    key={`${s.kind}-${s.label}`}
                     id={`hero-search-opt-${i}`}
                     role="option"
                     aria-selected={highlight === i}
@@ -155,7 +179,7 @@ export function SmartSearchAI() {
                     // input's blur fires, so the dropdown doesn't close first.
                     onMouseDown={(e) => {
                       e.preventDefault();
-                      select(service);
+                      select(s);
                     }}
                     onMouseEnter={() => setHighlight(i)}
                     className={[
@@ -163,10 +187,19 @@ export function SmartSearchAI() {
                       highlight === i ? 'bg-primary-light text-primary-800' : 'hover:bg-muted/60',
                     ].join(' ')}
                   >
-                    <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
-                    <span>
-                      <Highlight text={service} query={debounced} />
+                    {s.kind === 'kategori' ? (
+                      <Tag className="h-4 w-4 shrink-0 text-primary" />
+                    ) : (
+                      <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    )}
+                    <span className="flex-1">
+                      <Highlight text={s.label} query={debounced} />
                     </span>
+                    {s.kind === 'kategori' && (
+                      <span className="shrink-0 rounded-full bg-primary-light px-2 py-0.5 text-[11px] font-semibold text-primary-800">
+                        Kategori
+                      </span>
+                    )}
                   </li>
                 ))}
               </ul>
