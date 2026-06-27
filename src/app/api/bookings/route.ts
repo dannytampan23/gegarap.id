@@ -22,7 +22,12 @@ export async function POST(req: Request) {
     // that `handle()` maps to the right status code.
     const result = await createBooking(
       input,
-      { id: session.user.id, name: session.user.name ?? null, phone: session.user.phone ?? null },
+      {
+        id: session.user.id,
+        name: session.user.name ?? null,
+        phone: session.user.phone ?? null,
+        email: session.user.email ?? null,
+      },
       deviceIdFrom(req)
     );
 

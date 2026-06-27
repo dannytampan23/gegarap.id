@@ -37,6 +37,7 @@ export default async function CustomerDashboard() {
     dpAmount: j.dpAmount,
     paymentStatus: j.payment?.status ?? null,
     reviewRating: j.review?.rating ?? null,
+    createdAt: j.createdAt.toISOString(),
   }));
 
   return (

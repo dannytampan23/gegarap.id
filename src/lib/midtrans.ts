@@ -31,6 +31,7 @@ export async function createSnapToken(params: {
   amount: number;
   customerName: string;
   customerPhone: string;
+  customerEmail?: string | null;
   description: string;
 }): Promise<SnapResult> {
   // Dev fallback: without server keys we return a mock token so the booking
@@ -51,6 +52,7 @@ export async function createSnapToken(params: {
     customer_details: {
       first_name: params.customerName,
       phone: params.customerPhone,
+      ...(params.customerEmail ? { email: params.customerEmail } : {}),
     },
     item_details: [
       {

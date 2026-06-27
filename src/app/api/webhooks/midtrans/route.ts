@@ -9,6 +9,7 @@ import {
 } from '@/lib/payment-state';
 import { logEvent, logAlert, notifyOps } from '@/lib/logger';
 import { notifyPaymentStatus } from '@/lib/notifications';
+import { sendReceiptEmail } from '@/lib/email';
 
 /** Escalate to ops if signature failures spike (Bagian 10: >5 in 10 minutes). */
 const SIG_FAIL_WINDOW_MS = 10 * 60 * 1000;
@@ -173,6 +174,8 @@ export async function POST(req: Request) {
         logEvent('payment.status_changed', { paymentId: payment.id, from: 'PENDING', to: 'PAID' });
         // Notify both parties (Bagian 9): customer "diterima", provider "job baru".
         await notifyPaymentStatus(payment.id, 'PAID');
+        // Email the customer their receipt + PDF nota (best-effort, off the critical path).
+        await sendReceiptEmail(payment.jobId).catch(() => {});
       }
     } else if (isFailure) {
       const res = await prisma.$transaction((tx) =>

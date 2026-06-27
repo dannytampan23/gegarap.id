@@ -66,8 +66,9 @@ export function localBusinessJsonLd({
     description:
       'Marketplace jasa tukang hyper-local di Yogyakarta — tukang ledeng, listrik, dan kebersihan yang sudah terverifikasi KTP.',
     url: BASE_URL,
-    telephone: `+${SITE.waSupport}`,
-    email: SITE.emailSupport,
+    // Only advertise contact channels that are actually configured.
+    ...(SITE.contact.wa ? { telephone: `+${SITE.contact.wa}` } : {}),
+    ...(SITE.contact.email ? { email: SITE.contact.email } : {}),
     priceRange: 'Rp',
     areaServed: {
       '@type': 'AdministrativeArea',

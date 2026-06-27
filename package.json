@@ -12,6 +12,7 @@
     "dev": "concurrently -n emulators,next -c magenta,cyan \"npm:dev:emulators\" \"next dev\"",
     "dev:emulators": "node scripts/dev-emulators.mjs",
     "dev:next": "next dev",
+    "prebuild": "node scripts/check-env.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
@@ -40,8 +41,10 @@
     "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.106.0",
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
+    "@react-pdf/renderer": "^4.5.1",
     "@react-three/drei": "^9.122.0",
     "@react-three/fiber": "^8.18.0",
     "@supabase/supabase-js": "^2.108.1",
@@ -60,6 +63,7 @@
     "react": "^18",
     "react-dom": "^18",
     "react-leaflet": "^4.2.1",
+    "resend": "^6.16.0",
     "swr": "^2.4.2",
     "tailwind-merge": "^3.6.0",
     "three": "^0.169.0",

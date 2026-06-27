@@ -130,8 +130,12 @@ export default function TermsPage() {
           <h2 id="sengketa">5. Penyelesaian Sengketa</h2>
           <p>
             Bila terjadi masalah, hubungi{' '}
-            <a href={`mailto:${SITE.emailSupport}`}>{SITE.emailSupport}</a> dalam{' '}
-            <strong>3×24 jam</strong> setelah pekerjaan. Tim kami akan menengahi secara adil
+            {SITE.contact.email ? (
+              <a href={`mailto:${SITE.contact.email}`}>{SITE.contact.email}</a>
+            ) : (
+              <Link href="/help">Pusat Bantuan</Link>
+            )}{' '}
+            dalam <strong>3×24 jam</strong> setelah pekerjaan. Tim kami akan menengahi secara adil
             berdasarkan bukti dari kedua pihak.
           </p>
 

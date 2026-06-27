@@ -45,7 +45,9 @@ const faqs = [
   },
 ];
 
-const waLink = buildWALink(SITE.waSupport, 'Halo gegarap.id, saya butuh bantuan.');
+const waLink = SITE.contact.wa
+  ? buildWALink(SITE.contact.wa, 'Halo gegarap.id, saya butuh bantuan.')
+  : null;
 
 export default function HelpPage() {
   return (
@@ -89,35 +91,41 @@ export default function HelpPage() {
           </div>
         </div>
 
-        {/* Direct contact */}
-        <div className="mt-8 grid gap-4 sm:grid-cols-2">
-          <a
-            href={waLink}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-3 rounded-2xl border border-border bg-card p-4 shadow-soft transition-colors hover:border-primary/40"
-          >
-            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#25D366]/10 text-[#25D366]">
-              <MessageCircle className="h-5 w-5" />
-            </span>
-            <span>
-              <span className="block text-sm font-bold text-foreground">Chat Support</span>
-              <span className="block text-xs text-muted-foreground">Respon cepat via WhatsApp</span>
-            </span>
-          </a>
-          <a
-            href={`mailto:${SITE.emailSupport}`}
-            className="flex items-center gap-3 rounded-2xl border border-border bg-card p-4 shadow-soft transition-colors hover:border-primary/40"
-          >
-            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary-light text-primary">
-              <Mail className="h-5 w-5" />
-            </span>
-            <span>
-              <span className="block text-sm font-bold text-foreground">Email</span>
-              <span className="block text-xs text-muted-foreground">{SITE.emailSupport}</span>
-            </span>
-          </a>
-        </div>
+        {/* Direct contact — render only the channels that are configured. */}
+        {SITE.hasSupport && (
+          <div className="mt-8 grid gap-4 sm:grid-cols-2">
+            {waLink && (
+              <a
+                href={waLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 rounded-2xl border border-border bg-card p-4 shadow-soft transition-colors hover:border-primary/40"
+              >
+                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#25D366]/10 text-[#25D366]">
+                  <MessageCircle className="h-5 w-5" />
+                </span>
+                <span>
+                  <span className="block text-sm font-bold text-foreground">Chat Support</span>
+                  <span className="block text-xs text-muted-foreground">Respon cepat via WhatsApp</span>
+                </span>
+              </a>
+            )}
+            {SITE.contact.email && (
+              <a
+                href={`mailto:${SITE.contact.email}`}
+                className="flex items-center gap-3 rounded-2xl border border-border bg-card p-4 shadow-soft transition-colors hover:border-primary/40"
+              >
+                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary-light text-primary">
+                  <Mail className="h-5 w-5" />
+                </span>
+                <span>
+                  <span className="block text-sm font-bold text-foreground">Email</span>
+                  <span className="block text-xs text-muted-foreground">{SITE.contact.email}</span>
+                </span>
+              </a>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

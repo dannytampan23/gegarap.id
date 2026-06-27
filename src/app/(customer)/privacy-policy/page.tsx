@@ -105,9 +105,15 @@ export default function PrivacyPolicyPage() {
             <li>Meminta penghapusan data Anda dari sistem kami.</li>
           </ul>
           <p>
-            Untuk menggunakan hak-hak ini, kirim email ke{' '}
-            <a href={`mailto:${SITE.emailPrivacy}`}>{SITE.emailPrivacy}</a> dan kami akan merespons
-            dalam 7 hari kerja.
+            Untuk menggunakan hak-hak ini,{' '}
+            {SITE.privacyEmail ? (
+              <>
+                kirim email ke <a href={`mailto:${SITE.privacyEmail}`}>{SITE.privacyEmail}</a>
+              </>
+            ) : (
+              <>hubungi kami melalui <Link href="/help">Pusat Bantuan</Link></>
+            )}{' '}
+            dan kami akan merespons dalam 7 hari kerja.
           </p>
 
           <h2 id="cookie">5. Cookie</h2>
@@ -118,8 +124,14 @@ export default function PrivacyPolicyPage() {
 
           <h2 id="kontak">6. Kontak</h2>
           <p>
-            Ada pertanyaan tentang privasi Anda? Hubungi kami di{' '}
-            <a href={`mailto:${SITE.emailPrivacy}`}>{SITE.emailPrivacy}</a> atau lihat{' '}
+            Ada pertanyaan tentang privasi Anda? Hubungi kami{' '}
+            {SITE.privacyEmail ? (
+              <>
+                di <a href={`mailto:${SITE.privacyEmail}`}>{SITE.privacyEmail}</a> atau lihat{' '}
+              </>
+            ) : (
+              <>melalui </>
+            )}
             <Link href="/help">Pusat Bantuan</Link>.
           </p>
         </Prose>

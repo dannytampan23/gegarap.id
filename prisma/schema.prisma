@@ -24,6 +24,24 @@ model User {
   reviews         Review[]
   payments        Payment[]        @relation("CustomerPayments")
   providerProfile ProviderProfile?
+  chatSessions    ChatSession[]
+}
+
+// ─── CHAT SESSION ─────────────────────────────────────────────────────────
+// Persisted AI assistant conversation (System 4). `messages` is an append-only
+// JSON array of { role, content } turns. `userId` is optional so anonymous
+// (pre-login) visitors can still use the assistant; their history is keyed by
+// the client-supplied sessionId on the row id.
+model ChatSession {
+  id        String   @id @default(uuid())
+  userId    String?
+  messages  Json     @default("[]")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
 }
 
 // ─── OUTBOX MESSAGE ───────────────────────────────────────────────────────

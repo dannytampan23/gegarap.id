@@ -28,6 +28,8 @@ export interface BookingActor {
   name: string | null;
   /** Canonical WhatsApp number (628…). Required to book. */
   phone: string | null;
+  /** Customer email — passed to Midtrans customer_details (optional). */
+  email?: string | null;
 }
 
 export interface CreateBookingResult {
@@ -98,6 +100,7 @@ export async function createBooking(
     amount: fin.dpAmount,
     customerName: actor.name ?? customerPhone,
     customerPhone,
+    customerEmail: actor.email ?? null,
     description: `DP Booking ${provider.category} - ${provider.user.name}`,
   });
 
