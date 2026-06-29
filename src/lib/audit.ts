@@ -7,6 +7,10 @@ export const AuditAction = {
   KycReject: 'KYC_REJECT',
   RefundTriggered: 'REFUND_TRIGGERED',
   PayoutDisbursed: 'PAYOUT_DISBURSED',
+  ArticleGenerated: 'ARTICLE_GENERATED',
+  ArticlePublished: 'ARTICLE_PUBLISHED',
+  ArticleArchived: 'ARTICLE_ARCHIVED',
+  ArticleDeleted: 'ARTICLE_DELETED',
 } as const;
 
 export type AuditActionType = (typeof AuditAction)[keyof typeof AuditAction];

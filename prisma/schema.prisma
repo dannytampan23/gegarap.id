@@ -44,6 +44,49 @@ model ChatSession {
   @@index([userId])
 }
 
+// ─── ARTICLE (programmatic SEO content engine) ────────────────────────────
+// AI-generated home-services SEO article (System 5). Produced by the content
+// pipeline (lib/ai/content): topic → SEO structuring → generation → self-audit →
+// dedup → grounded internal links. Persisted as DRAFT; an admin reviews and
+// PUBLISHES. `slug` is the public URL key (/artikel/<slug>). Money/PII never live
+// here — these are public marketing pages.
+model Article {
+  id              String   @id @default(uuid())
+  slug            String   @unique // URL key, kebab-case, derived from title
+  title           String // SEO title, ≤ 60 chars
+  metaDescription String // ≤ 155 chars
+  contentMarkdown String // body in Markdown (controlled subset)
+  faq             Json     @default("[]") // [{ q, a }]
+  internalLinks   Json     @default("[]") // [{ label, href }] — grounded to real routes
+  category        String // matches ProviderProfile.category (drives the CTA + links)
+  location        String // kecamatan / area string for local relevance
+  primaryKeyword  String
+  keywords        String[] @default([]) // secondary/semantic keywords
+  intent          String   @default("informational") // informational | transactional
+
+  // Self-audit scores (1–10 each) from the quality gate, kept for ops/analytics.
+  scoreSeo         Int @default(0)
+  scoreReadability Int @default(0)
+  scoreValue       Int @default(0)
+  scoreTrust       Int @default(0)
+  scoreConversion  Int @default(0)
+  scoreTotal       Int @default(0)
+
+  // Dedup bookkeeping vs existing titles (no embeddings — token/trigram sim).
+  similarityScore Float   @default(0)
+  newAngle        String?
+
+  status      String    @default("DRAFT") // DRAFT | PUBLISHED | ARCHIVED
+  generatedBy String    @default("fallback") // "claude-sonnet-4-6" | "fallback"
+  authorId    String? // admin User.id who generated it (null = system)
+  publishedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([status, publishedAt])
+  @@index([category])
+}
+
 // ─── OUTBOX MESSAGE ───────────────────────────────────────────────────────
 // Transactional outbox for outbound notifications. Request handlers ENQUEUE a
 // row (a fast local INSERT) instead of awaiting a slow external WhatsApp call,

@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { ShieldCheck, Wallet, TrendingUp, CreditCard, Timer, BarChart3 } from 'lucide-react';
+import { ShieldCheck, Wallet, TrendingUp, CreditCard, Timer, BarChart3, FileText } from 'lucide-react';
 import { requireAdmin } from '@/lib/admin-guard';
 import { computeBusinessMetrics } from '@/lib/metrics';
 import { StatCard } from '@/components/ui/StatCard';
@@ -33,13 +33,22 @@ export default async function AdminPage() {
           Tinjau dokumen KTP dan data pencairan tukang yang menunggu persetujuan. Hanya tukang yang
           disetujui yang tampil di marketplace.
         </p>
-        <Link
-          href="/admin/payments"
-          className="mt-4 inline-flex items-center gap-2 rounded-xl border border-border bg-card px-3.5 py-2 text-sm font-semibold text-foreground hover:border-primary hover:text-primary"
-        >
-          <Wallet className="h-4 w-4" />
-          Lihat Transaksi Pembayaran
-        </Link>
+        <div className="mt-4 flex flex-wrap gap-2.5">
+          <Link
+            href="/admin/payments"
+            className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-3.5 py-2 text-sm font-semibold text-foreground hover:border-primary hover:text-primary"
+          >
+            <Wallet className="h-4 w-4" />
+            Lihat Transaksi Pembayaran
+          </Link>
+          <Link
+            href="/admin/articles"
+            className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-3.5 py-2 text-sm font-semibold text-foreground hover:border-primary hover:text-primary"
+          >
+            <FileText className="h-4 w-4" />
+            Mesin Konten SEO
+          </Link>
+        </div>
       </div>
 
       {/* Business metrics (Bagian 8/11) */}
