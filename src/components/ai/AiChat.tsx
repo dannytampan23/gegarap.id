@@ -2,7 +2,8 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { Sparkles, Send, Star, MapPin, ShieldCheck, AlertTriangle, Loader2, Wrench } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Sparkles, Send, Star, MapPin, ShieldCheck, AlertTriangle, Wrench } from 'lucide-react';
 import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
 import { buttonVariants } from '@/components/ui/Button';
@@ -35,13 +36,34 @@ type Message =
   | { role: 'user'; content: string }
   | ({ role: 'assistant' } & AssistantTurn);
 
+// Diagnostic, problem-first quick asks (the assistant still resolves these into
+// verified-tukang recommendations). Mirrors the homepage "masalah rumah" framing.
 const SUGGESTIONS = [
-  'Tukang ledeng di Depok, budget 200 ribu',
-  'Butuh bersih rumah menyeluruh di Sleman',
-  'Pasang lampu taman, ada yang murah?',
+  'AC tidak dingin, kenapa ya?',
+  'Listrik di rumah sering jeglek',
+  'Air kamar mandi mampet',
 ];
 
 const SESSION_KEY = 'gegarap_ai_session';
+
+/** Framer entrance for each chat turn — fade + slide up, staggered a touch. */
+const bubbleIn = {
+  initial: { opacity: 0, y: 12, scale: 0.98 },
+  animate: { opacity: 1, y: 0, scale: 1 },
+  transition: { duration: 0.35, ease: [0.16, 1, 0.3, 1] as const },
+};
+
+function TypingIndicator() {
+  return (
+    <motion.div {...bubbleIn} className="flex justify-start">
+      <div className="flex items-center gap-1.5 rounded-2xl rounded-bl-sm bg-muted px-4 py-3">
+        <span className="typing-dot h-2 w-2 rounded-full bg-muted-foreground" />
+        <span className="typing-dot h-2 w-2 rounded-full bg-muted-foreground animation-delay-100" />
+        <span className="typing-dot h-2 w-2 rounded-full bg-muted-foreground animation-delay-200" />
+      </div>
+    </motion.div>
+  );
+}
 
 export function AiChat() {
   const [messages, setMessages] = React.useState<Message[]>([]);
@@ -52,6 +74,10 @@ export function AiChat() {
 
   React.useEffect(() => {
     sessionId.current = localStorage.getItem(SESSION_KEY) ?? undefined;
+    // Prefill from `?q=` (e.g. the "Tanya AI tentang artikel ini" button) so the
+    // reader lands with their question ready — they just review and hit send.
+    const q = new URLSearchParams(window.location.search).get('q');
+    if (q) setInput(q);
   }, []);
 
   React.useEffect(() => {
@@ -124,64 +150,86 @@ export function AiChat() {
     }
   }
 
+  const hasChat = messages.length > 0;
+
   return (
     <div className="flex h-[calc(100vh-12rem)] min-h-[28rem] flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-card">
       {/* Header */}
       <div className="flex items-center gap-3 border-b border-border bg-muted/30 px-5 py-4">
-        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-glow">
+        <span className="relative flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-glow">
           <Sparkles className="h-5 w-5" />
+          <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-card bg-emerald-400" />
         </span>
         <div>
           <p className="font-bold text-foreground">Asisten gegarap.id</p>
-          <p className="text-xs text-muted-foreground">Ceritakan kebutuhanmu, saya carikan tukangnya.</p>
+          <p className="text-xs text-muted-foreground">
+            {loading ? 'Sedang mengetik…' : 'Online · biasanya balas dalam beberapa detik'}
+          </p>
         </div>
       </div>
 
       {/* Messages */}
-      <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto px-4 py-5 sm:px-5">
-        {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center gap-4 py-10 text-center">
+      <div
+        ref={scrollRef}
+        className="flex-1 space-y-4 overflow-y-auto bg-surface/40 px-4 py-5 sm:px-5"
+      >
+        {!hasChat && (
+          <motion.div
+            {...bubbleIn}
+            className="flex flex-col items-center justify-center gap-4 py-10 text-center"
+          >
             <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary-light text-primary">
               <Wrench className="h-7 w-7" />
             </span>
             <div>
-              <p className="font-semibold text-foreground">Mau cari tukang apa hari ini?</p>
-              <p className="mt-1 text-sm text-muted-foreground">Coba salah satu contoh di bawah:</p>
+              <p className="font-semibold text-foreground">Ada masalah apa di rumah?</p>
+              <p className="mt-1 text-sm text-muted-foreground">Coba salah satu pertanyaan ini:</p>
             </div>
             <div className="flex flex-wrap justify-center gap-2">
-              {SUGGESTIONS.map((s) => (
-                <button
+              {SUGGESTIONS.map((s, i) => (
+                <motion.button
                   key={s}
                   type="button"
                   onClick={() => send(s)}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.15 + i * 0.08 }}
+                  whileHover={{ scale: 1.04 }}
+                  whileTap={{ scale: 0.96 }}
                   className="rounded-full border border-border bg-card px-3.5 py-2 text-sm text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
                 >
                   {s}
-                </button>
+                </motion.button>
               ))}
             </div>
-          </div>
+          </motion.div>
         )}
 
         {messages.map((m, i) =>
           m.role === 'user' ? (
-            <div key={i} className="flex justify-end">
-              <div className="max-w-[80%] rounded-2xl rounded-br-sm bg-primary px-4 py-2.5 text-sm text-primary-foreground">
+            <motion.div key={i} {...bubbleIn} className="flex justify-end">
+              <div className="max-w-[80%] rounded-2xl rounded-br-sm bg-primary px-4 py-2.5 text-sm text-primary-foreground shadow-soft">
                 {m.content}
               </div>
-            </div>
+            </motion.div>
           ) : (
-            <div key={i} className="flex flex-col gap-3">
-              <div className="max-w-[88%] rounded-2xl rounded-bl-sm bg-muted px-4 py-2.5 text-sm text-foreground">
+            <motion.div key={i} {...bubbleIn} className="flex flex-col gap-3">
+              <div className="max-w-[88%] whitespace-pre-line rounded-2xl rounded-bl-sm bg-muted px-4 py-2.5 text-sm leading-relaxed text-foreground shadow-soft">
                 {m.pesan}
               </div>
 
               {m.rekomendasi.length > 0 && (
                 <div className="grid gap-2.5">
-                  {m.rekomendasi.map((r) => {
+                  {m.rekomendasi.map((r, ri) => {
                     const info = m.providers.find((p) => p.id === r.id);
                     return (
-                      <div key={r.id} className="rounded-2xl border border-border bg-card p-4 shadow-soft">
+                      <motion.div
+                        key={r.id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.1 + ri * 0.08, duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+                        className="rounded-2xl border border-border bg-card p-4 shadow-soft"
+                      >
                         <div className="flex items-start gap-3">
                           <Avatar name={r.nama} size="md" />
                           <div className="min-w-0 flex-1">
@@ -223,7 +271,7 @@ export function AiChat() {
                         >
                           Booking {r.nama.split(' ')[0]}
                         </Link>
-                      </div>
+                      </motion.div>
                     );
                   })}
                 </div>
@@ -233,17 +281,29 @@ export function AiChat() {
                 <p className="max-w-[88%] text-xs text-muted-foreground">💡 {m.catatan}</p>
               )}
               {m.cta && <p className="max-w-[88%] text-sm font-medium text-foreground">{m.cta}</p>}
-            </div>
+            </motion.div>
           )
         )}
 
-        {loading && (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin text-primary" />
-            Mencari tukang terbaik untukmu…
-          </div>
-        )}
+        <AnimatePresence>{loading && <TypingIndicator />}</AnimatePresence>
       </div>
+
+      {/* Persistent quick chips (once a conversation has started) */}
+      {hasChat && (
+        <div className="flex gap-2 overflow-x-auto border-t border-border bg-card px-3 py-2.5 scrollbar-hide sm:px-4">
+          {SUGGESTIONS.map((s) => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => send(s)}
+              disabled={loading}
+              className="shrink-0 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground disabled:opacity-50"
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Input */}
       <form
@@ -260,14 +320,15 @@ export function AiChat() {
           aria-label="Pesan untuk asisten"
           className="h-11 flex-1 rounded-xl border border-border bg-card px-4 text-sm text-foreground outline-none transition-all focus:border-primary/50 focus:ring-4 focus:ring-primary/10"
         />
-        <button
+        <motion.button
           type="submit"
           disabled={loading || !input.trim()}
           aria-label="Kirim"
+          whileTap={{ scale: 0.9 }}
           className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-glow transition-all hover:bg-primary-hover disabled:opacity-50"
         >
           <Send className="h-4.5 w-4.5" />
-        </button>
+        </motion.button>
       </form>
     </div>
   );

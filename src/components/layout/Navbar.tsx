@@ -10,6 +10,8 @@ import {
   Hammer,
   Search,
   Briefcase,
+  BookOpen,
+  Bot,
   LayoutDashboard,
   ClipboardList,
   LogOut,
@@ -21,6 +23,8 @@ import { cn } from '@/lib/utils';
 import { buttonVariants } from '@/components/ui/Button';
 
 const links = [
+  { href: '/artikel', label: 'Artikel', icon: BookOpen },
+  { href: '/asisten', label: 'Asisten AI', icon: Bot },
   { href: '/search', label: 'Cari Tukang', icon: Search },
   { href: '/onboarding', label: 'Jadi Mitra', icon: Briefcase },
 ];

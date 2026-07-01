@@ -7,6 +7,7 @@ import { SITE } from '@/lib/site';
 import { getPublishedArticle } from '@/lib/services/article';
 import { CATEGORY_CTA, categorySearchHref, type ContentCategory } from '@/lib/ai/content';
 import { MarkdownContent } from '@/components/MarkdownContent';
+import { ArticleActions } from '@/components/article/ArticleActions';
 
 export const dynamic = 'force-dynamic';
 
@@ -42,6 +43,12 @@ export default async function ArtikelDetailPage({ params }: { params: { slug: st
   const cta =
     CATEGORY_CTA[article.category as ContentCategory] ?? 'Pesan Tukang Terpercaya Sekarang';
   const url = `${BASE_URL}/artikel/${article.slug}`;
+
+  // Prefill the AI chat with the article's context so the floating "Tanya AI"
+  // button opens a conversation that's already about what the reader is viewing.
+  const asistenHref = `/asisten?q=${encodeURIComponent(
+    `Saya baca artikel "${article.title}". Bisa bantu soal ${article.category} di ${article.location}?`
+  )}`;
 
   // ── Structured data for rich results ──────────────────────────────────────
   const articleLd = {
@@ -185,6 +192,13 @@ export default async function ArtikelDetailPage({ params }: { params: { slug: st
           </ul>
         </section>
       )}
+
+      {/* Sticky "Panggil Tukang" bar + floating "Tanya AI" button */}
+      <ArticleActions
+        searchHref={categorySearchHref(article.category as ContentCategory)}
+        ctaLabel={cta}
+        asistenHref={asistenHref}
+      />
     </article>
   );
 }

@@ -175,6 +175,38 @@
     display: none;
   }
 
+  /* Material-style ripple bloom used by RippleButton. */
+  .animate-ripple {
+    animation: ripple 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+  @keyframes ripple {
+    from {
+      opacity: 0.5;
+      transform: scale(0);
+    }
+    to {
+      opacity: 0;
+      transform: scale(1);
+    }
+  }
+
+  /* Chat "typing" indicator — three dots that bounce out of phase. */
+  .typing-dot {
+    animation: typing-bounce 1.2s ease-in-out infinite;
+  }
+  @keyframes typing-bounce {
+    0%,
+    60%,
+    100% {
+      transform: translateY(0);
+      opacity: 0.4;
+    }
+    30% {
+      transform: translateY(-4px);
+      opacity: 1;
+    }
+  }
+
   .animation-delay-100 {
     animation-delay: 0.1s;
   }

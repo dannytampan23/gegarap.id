@@ -68,10 +68,16 @@ export async function POST(req: Request) {
     }
 
     const filters = extractFilters(message);
+    const history = asHistory(body.history);
 
-    // Cache identical (message + filters) responses for 5 minutes.
+    // Cache identical (message + filters + conversation history) responses for 5
+    // minutes. History MUST be part of the key: the assistant is multi-turn, so a
+    // short follow-up like "iya" or "udah lama" means different things in
+    // different conversations — keying on the message alone would return one
+    // user's contextual reply to another. Empty-history turns (the suggested
+    // chips) still dedupe across users, which is where caching pays off.
     const cacheKey = `ai:chat:${createHash('sha256')
-      .update(`${message}|${JSON.stringify(filters)}`)
+      .update(`${message}|${JSON.stringify(filters)}|${JSON.stringify(history)}`)
       .digest('hex')}`;
     let payload = await cacheGet<ChatPayload>(cacheKey);
     let mock = false;
@@ -81,7 +87,7 @@ export async function POST(req: Request) {
       const { recommendation, mock: m } = await generateRecommendation({
         query: message,
         providers,
-        history: asHistory(body.history),
+        history,
       });
       mock = m;
       payload = { recommendation, providers };

@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { AiChat } from '@/components/ai/AiChat';
+import { PageTransition } from '@/components/motion/PageTransition';
 
 export const metadata: Metadata = {
   title: 'Asisten AI — Cari Tukang',
@@ -9,7 +10,7 @@ export const metadata: Metadata = {
 
 export default function AsistenPage() {
   return (
-    <div className="container max-w-2xl py-8 sm:py-12">
+    <PageTransition className="container max-w-2xl py-8 sm:py-12">
       <div className="mb-6 text-center">
         <h1 className="text-3xl font-extrabold tracking-tight text-foreground sm:text-4xl">
           Tanya Asisten AI
@@ -19,6 +20,6 @@ export default function AsistenPage() {
         </p>
       </div>
       <AiChat />
-    </div>
+    </PageTransition>
   );
 }
