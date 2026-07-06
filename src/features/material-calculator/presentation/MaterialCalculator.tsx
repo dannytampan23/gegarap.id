@@ -1,10 +1,10 @@
 'use client';
 
 import { useMemo, useState, useCallback } from 'react';
-import { Save, History, RotateCcw, Trash2 } from 'lucide-react';
+import { AlertTriangle, Save, History, RotateCcw, Trash2 } from 'lucide-react';
 import { fieldErrors } from '@/lib/validations';
-import { formatCurrency } from '@/lib/utils';
-import type { Formula, LengthUnit } from '../domain/types';
+import { cn, formatCurrency } from '@/lib/utils';
+import type { CalculationResult, Formula, LengthUnit } from '../domain/types';
 import { FORMULAS, getFormula } from '../configs/material-formulas';
 import { normalizeInputs, buildNormalizedSchema } from '../application/dto';
 import { calculateWithForm } from '../application/service';
@@ -43,15 +43,21 @@ export function MaterialCalculator() {
   const formula = getFormula(jobId) ?? FORMULAS[0];
 
   // Instant, local calculation on every change — the same engine the API uses.
-  const { result, errors } = useMemo(() => {
+  const { result, errors } = useMemo<{
+    result: CalculationResult | null;
+    errors: Record<string, string>;
+  }>(() => {
     const normalized = normalizeInputs(formula, inputs, units);
     const parsed = buildNormalizedSchema(formula).safeParse(normalized);
-    const errs = parsed.success ? {} : fieldErrors(parsed.error);
-    const res = calculateWithForm(formula, normalized, {
+    if (!parsed.success) {
+      return { result: null, errors: fieldErrors(parsed.error) };
+    }
+
+    const res = calculateWithForm(formula, parsed.data, {
       prices,
       labor: labor.enabled ? { workers: labor.workers, wagePerDay: labor.wagePerDay } : undefined,
     });
-    return { result: res, errors: errs };
+    return { result: res, errors: {} };
   }, [formula, inputs, units, prices, labor]);
 
   const selectJob = useCallback((id: string) => {
@@ -86,6 +92,7 @@ export function MaterialCalculator() {
   }, [formula]);
 
   const saveToHistory = useCallback(() => {
+    if (!result) return;
     add({
       jobLabel: result.jobLabel,
       totalCost: result.totalCost,
@@ -161,13 +168,32 @@ export function MaterialCalculator() {
             <button
               type="button"
               onClick={saveToHistory}
-              className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground shadow-soft transition-colors hover:bg-muted"
+              disabled={!result}
+              className={cn(
+                'flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground shadow-soft transition-colors hover:bg-muted',
+                !result && 'cursor-not-allowed opacity-50 hover:bg-card'
+              )}
             >
               <Save className="h-3.5 w-3.5 text-primary" />
               Simpan ke Riwayat
             </button>
           </div>
-          <ResultCard result={result} />
+          {result ? (
+            <ResultCard result={result} />
+          ) : (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-amber-900">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
+                <div>
+                  <h3 className="text-sm font-bold">Input belum valid</h3>
+                  <p className="mt-1 text-sm text-amber-800">
+                    Perbaiki field bertanda merah untuk menampilkan rincian material dan estimasi
+                    biaya.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

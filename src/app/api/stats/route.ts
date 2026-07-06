@@ -10,7 +10,9 @@ import { NextResponse } from 'next/server';
  *
  * Cached for an hour — these numbers move slowly and the homepage is hot.
  */
-export const revalidate = 3600;
+export const dynamic = 'force-dynamic';
+
+const STATS_CACHE_SECONDS = 3600;
 
 export interface StatsResponse {
   workerCount: number;
@@ -35,7 +37,11 @@ export async function GET() {
       jobCount,
     };
 
-    return NextResponse.json(body);
+    return NextResponse.json(body, {
+      headers: {
+        'Cache-Control': `public, s-maxage=${STATS_CACHE_SECONDS}, stale-while-revalidate=${STATS_CACHE_SECONDS}`,
+      },
+    });
   } catch (err) {
     console.error('[api/stats] error:', err);
     return NextResponse.json({ ok: false, message: 'Gagal memuat statistik.' }, { status: 500 });

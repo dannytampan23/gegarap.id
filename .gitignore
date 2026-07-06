@@ -29,6 +29,9 @@ yarn-error.log*
 .env
 .env*.local
 
+# local agent/editor settings
+.claude/settings.local.json
+
 # database
 *.db
 *.db-shm
