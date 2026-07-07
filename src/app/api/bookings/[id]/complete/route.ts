@@ -13,8 +13,9 @@ const completeSchema = z.object({
 /** Job states from which the customer may confirm completion. */
 const COMPLETABLE_JOB = ['CONFIRMED', 'IN_PROGRESS', 'AWAITING_CONFIRMATION'];
 
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   return handle(async () => {
+    const { id } = await params;
     const session = await getSession();
     if (!session?.user?.id) return fail('Unauthorized', 401);
 
@@ -23,7 +24,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     const { rating, comment } = completeSchema.parse(body);
 
     const job = await prisma.job.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: { payment: true },
     });
 

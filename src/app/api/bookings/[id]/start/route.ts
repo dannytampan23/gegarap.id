@@ -10,13 +10,14 @@ import { logEvent } from '@/lib/logger';
  * the payment PAID → HELD (escrow held while the job runs) and the job to
  * IN_PROGRESS. Provider-only.
  */
-export async function POST(_req: Request, { params }: { params: { id: string } }) {
+export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   return handle(async () => {
+    const { id } = await params;
     const session = await getSession();
     if (!session?.user?.id) return fail('Unauthorized', 401);
 
     const job = await prisma.job.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: { payment: true, provider: { select: { userId: true } } },
     });
     if (!job) return fail('Booking tidak ditemukan.', 404);

@@ -30,8 +30,6 @@ export async function register(): Promise<void> {
       captureMessage: (m, ctx) => Sentry.captureMessage(m, ctx as unknown),
     });
 
-    // eslint-disable-next-line no-console
-    console.log(JSON.stringify({ event: 'sentry.initialized', environment: process.env.NODE_ENV }));
   } catch {
     // @sentry/nextjs not installed — silently stay on the logger-only path.
   }

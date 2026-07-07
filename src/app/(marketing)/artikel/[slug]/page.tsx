@@ -27,9 +27,10 @@ interface InternalLink {
 export async function generateMetadata({
   params,
 }: {
-  params: { slug: string };
+  params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
-  const article = await getPublishedArticle(params.slug);
+  const { slug } = await params;
+  const article = await getPublishedArticle(slug);
   if (!article) return { title: 'Artikel tidak ditemukan' };
   return pageMetadata({
     title: article.title,
@@ -38,8 +39,9 @@ export async function generateMetadata({
   });
 }
 
-export default async function ArtikelDetailPage({ params }: { params: { slug: string } }) {
-  const article = await getPublishedArticle(params.slug);
+export default async function ArtikelDetailPage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+  const article = await getPublishedArticle(slug);
   if (!article) notFound();
 
   const faq = (article.faq as unknown as FaqItem[]) ?? [];

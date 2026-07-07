@@ -9,8 +9,9 @@ const rejectSchema = z.object({
 });
 
 /** POST /api/admin/providers/:id/reject — fail KYC with a stored reason. */
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   return handle(async () => {
+    const { id } = await params;
     const admin = await requireAdmin();
     if (!admin) return fail('Akses ditolak.', 403);
 
@@ -19,7 +20,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     const { reason } = rejectSchema.parse(body);
 
     const profile = await prisma.providerProfile.findUnique({
-      where: { id: params.id },
+      where: { id },
       select: {
         id: true,
         user: { select: { name: true, phone: true } },

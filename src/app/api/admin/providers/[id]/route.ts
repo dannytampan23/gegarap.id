@@ -5,13 +5,14 @@ import { maskNik } from '@/lib/provider-verification';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
+export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   return handle(async () => {
+    const { id } = await params;
     const admin = await requireAdmin();
     if (!admin) return fail('Akses ditolak.', 403);
 
     const profile = await prisma.providerProfile.findUnique({
-      where: { id: params.id },
+      where: { id },
       select: {
         id: true,
         category: true,

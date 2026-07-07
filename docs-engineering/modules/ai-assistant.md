@@ -1,49 +1,82 @@
 # Module: AI Assistant
 
-A conversational helper that finds suitable providers from a natural-language
-request, backed by retrieval over the provider catalogue.
+A consultation-first home-services assistant for Gegarap.id. It diagnoses user
+problems before recommending technicians, blocks unsafe DIY guidance, and only
+surfaces booking actions when the handoff logic says the user is ready.
 
 ## Purpose
 
-Turn a free-text need ("butuh tukang AC di Bekasi besok") into a filtered,
-ranked set of real providers, with a deterministic fallback when the model is
-unavailable.
+Turn a free-text home issue into a short, grounded consultation response with
+structured metadata:
+
+```json
+{
+  "message": "string",
+  "category": "string",
+  "riskLevel": "low | medium | high | critical",
+  "confidenceLevel": "low | medium | high",
+  "bookingEligible": false,
+  "suggestedNextAction": "string"
+}
+```
+
+The API also returns legacy UI compatibility fields (`pesan`, `rekomendasi`,
+`catatan`, `cta`) plus `providers`, `sessionId`, and `mock`.
 
 ## Responsibilities
 
-- Extract structured intent (category, area, constraints) from the message.
-- Retrieve candidate providers via keyword + filter RAG over `ProviderProfile`
-  (no embeddings).
-- Produce a structured, grounded answer with the model, or a deterministic
-  fallback ranking.
-- Converse diagnose-first: ask a follow-up when the request is vague, keep
-  `rekomendasi` empty while gathering context, and surface providers only once
-  the need is clear (see [prompt.md](../mappings/prompt.md)).
-- Score for fraud/quality signals and persist the conversation.
+- Classify service category from the latest message and recent history.
+- Detect critical safety risks before model or provider recommendation logic.
+- Build compact conversation memory so the assistant avoids repeated questions.
+- Assemble modular prompts for system, safety, diagnosis, booking, category, and tone rules.
+- Validate structured model output with Zod before returning it.
+- Apply quality guardrails for long, robotic, or repeated-question responses.
+- Gate provider cards and booking CTA through `bookingEligible`.
+- Persist conversation turns without exposing prompt/debug data in production.
 
-## Key files
+## Key Files
 
-| File | Role | Mapping | Code stripped |
-|------|------|---------|---------------|
-| `src/lib/ai/chat.ts` | Orchestration of a chat turn | [chat.md](../mappings/chat.md) | ✅ |
-| `src/lib/ai/prompt.ts` | Prompt construction + diagnose-first persona | [prompt.md](../mappings/prompt.md) | ✅ |
-| `src/app/api/ai/chat/route.ts` | HTTP entry | [ai-chat-route.md](../mappings/ai-chat-route.md) | ✅ |
-| `src/lib/ai/extract.ts` | Message → structured intent | _to add_ | ⬜ |
-| `src/lib/ai/search.ts` | Filter + keyword retrieval | _to add_ | ⬜ |
-| `src/lib/ai/fraud.ts` | Fraud/quality scoring + badge | _to add_ | ⬜ |
-| `src/lib/cache.ts` | Upstash response cache | _to add_ | ⬜ |
-| `src/components/ai/AiChat.tsx` | Chat UI (client) | _to add_ | ⬜ |
+| File | Role |
+|------|------|
+| `src/ai/gegarap-assistant/engine.ts` | Orchestrates safety, prompts, model call, validation, quality guard, and booking handoff |
+| `src/ai/gegarap-assistant/prompts/*.ts` | Modular prompt rules |
+| `src/ai/gegarap-assistant/safety-classifier.ts` | Critical danger keyword classifier |
+| `src/ai/gegarap-assistant/diagnosis-classifier.ts` | Category detection |
+| `src/ai/gegarap-assistant/memory.ts` | Compact conversation memory and question history |
+| `src/ai/gegarap-assistant/booking-handoff.ts` | Booking eligibility decision |
+| `src/ai/gegarap-assistant/quality-guard.ts` | Conversation quality checks |
+| `src/ai/gegarap-assistant/validators.ts` | Response contract validation |
+| `src/app/api/ai/chat/route.ts` | HTTP entrypoint, rate limit, cache, persistence |
+| `src/components/ai/AiChat.tsx` | Consultation UI |
+| `src/__tests__/gegarap-assistant.test.ts` | Safety, diagnosis, booking, quality, and contract tests |
 
-## Data flow
+## Data Flow
 
+```text
+POST /api/ai/chat
+  -> sanitize + rate limit
+  -> extract filters + provider search
+  -> processChat
+     -> safety classifier
+     -> category classifier
+     -> conversation memory
+     -> modular prompt assembly
+     -> Anthropic tool response
+     -> Zod validation
+     -> quality guard
+     -> booking handoff
+  -> persist ChatSession
+  -> response
 ```
-POST /api/ai/chat ──> extract intent ──> search.ts (filter+keyword over providers)
-        ──> prompt.ts ──> Claude (structured) | deterministic fallback
-        ──> fraud scoring ──> persist ChatSession ──> response (cached)
-```
 
-## Dependencies
+Critical safety messages return a deterministic safety response before the model
+or recommendation path. If the model is unavailable, the route falls back to the
+legacy deterministic recommendation path, but the safety classifier still runs
+first through `processChat`.
 
-Anthropic Claude (`claude-sonnet-4-6`, `@anthropic-ai/sdk`, `ANTHROPIC_API_KEY`),
-Upstash (cache), PostgreSQL (`ProviderProfile`, `ChatSession`). All are optional
-at runtime — the deterministic path keeps the feature usable without the model.
+## Production Notes
+
+- `ANTHROPIC_API_KEY` is required for model-backed consultation.
+- `NODE_ENV=production` strips any `debug` payload before responding.
+- Recommendations must only use provider data returned from the search layer.
+- Booking cards must not render unless `bookingEligible` is true.

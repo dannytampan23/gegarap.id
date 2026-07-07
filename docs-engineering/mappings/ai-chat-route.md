@@ -1,63 +1,73 @@
 # Mapping: src/app/api/ai/chat/route.ts
 
-HTTP entry for the assistant. POST-only, `nodejs` runtime, `force-dynamic`.
-
-> Naming note: the App Router has many `route.ts` files, so a basename mapping
-> (`route.md`) would collide. Route/page/layout files use a qualified slug
-> (`ai-chat-route.md`) instead. See `docs-engineering/README.md`.
+HTTP entrypoint for the Gegarap assistant. The route stays responsible for
+transport concerns: validation, rate limiting, provider lookup, cache,
+conversation persistence, and response envelope.
 
 ## Constants
 
-- `MAX_MESSAGE_LEN = 500`, `CACHE_TTL_SECONDS = 300`.
+- `MAX_MESSAGE_LEN = 500`
+- `CACHE_TTL_SECONDS = 300`
 
 ## Function: sanitize
 
-- **Purpose:** Clean an untrusted message string.
-- **Input:** `unknown`. **Output:** `string | null`.
-- **Logic:** Replace control chars with spaces, collapse whitespace, trim, cap at `MAX_MESSAGE_LEN`; empty → `null`.
+- Input: unknown message payload.
+- Output: clean `string | null`.
+- Behavior: removes control characters, collapses whitespace, trims, limits to
+  500 characters, and rejects empty messages.
 
 ## Function: asHistory
 
-- **Purpose:** Validate and trim client-sent conversation history.
-- **Input:** `unknown`. **Output:** `ChatTurn[]`.
-- **Logic:** Keep only well-formed `{ role, content ≤ 2000 }` turns; keep the last 6.
+- Input: unknown client history payload.
+- Output: recent `{ role, content }[]` turns.
+- Behavior: accepts only `user` and `assistant` roles, caps each message at
+  2,000 characters, and keeps the last 6 turns.
 
 ## Function: POST
 
-- **Purpose:** The chat request handler.
-- **Input:** JSON body `{ message, history?, sessionId? }`.
-- **Output:** `ok({ ...recommendation, providers, sessionId, mock })` or `fail`.
-- **Flow:**
-  - parse + `sanitize` message (400 on bad input);
-  - resolve Firebase session → `userId`;
-  - rate limit `ai:chat:{sessionId|ip}` at 20/min (429 on exceed);
-  - `extractFilters` + `asHistory`;
-  - cache lookup by `sha256(message | filters | history)`;
-  - miss → `searchProviders` + `generateRecommendation` → cache 300s;
-  - persist `ChatSession` (anonymous allowed; never append to another user's session);
-  - respond.
+- Input body: `{ message, history?, sessionId? }`
+- Success response: `ok({ ...assistantResponse, providers, sessionId, mock })`
+- Error response: `fail(message, status)`
 
-### Design note — the cache key MUST include history
+## Flow
 
-The assistant is multi-turn, so a short follow-up like "iya" or "udah lama"
-means different things in different conversations. Keying on the message alone
-would serve one user's contextual reply to another. Empty-history first turns
-(the suggested chips) still dedupe across users — that is where caching pays off.
-Fixed 2026-07-01 alongside the diagnose-first prompt.
+1. Parse JSON body.
+2. Sanitize `message`.
+3. Resolve Firebase session for optional `userId`.
+4. Rate limit by `sessionId` or client IP.
+5. Extract filters and normalize conversation history.
+6. Cache by message, filters, and history.
+7. On cache miss, search providers and call `processChat`.
+8. If the model path fails, use deterministic fallback recommendation.
+9. Persist the latest user and assistant turns to `ChatSession`.
+10. Strip `debug` in production.
+11. Return the assistant payload plus UI metadata.
 
-### Design note — the mock flag
+## Response Contract
 
-`mock` comes from `generateRecommendation` and is only `true` on the no-API-key
-fallback. A cache hit leaves `mock = false` because `ChatPayload` does not store
-it. This is why a live `mock: true` response is proof that `ANTHROPIC_API_KEY` is
-unset in the running environment.
+The assistant response includes:
 
-### Errors
+- `message`
+- `category`
+- `riskLevel`
+- `confidenceLevel`
+- `bookingEligible`
+- `suggestedNextAction`
 
-Bad body/message → 400; rate limit → 429; unexpected → 500 (logged
-`ai.chat.error`). Persistence failures are swallowed (logged
-`ai.chat.persist_failed`) — a write hiccup must not fail the chat.
+Legacy UI fields are still returned during the chat UI migration:
 
-## Consumers
+- `pesan`
+- `rekomendasi`
+- `catatan`
+- `cta`
 
-`src/components/ai/AiChat.tsx` (client).
+## Safety
+
+`processChat` runs the safety classifier before model calls. Critical danger
+cases return a deterministic safety-first response and never include provider
+recommendations.
+
+## Logging
+
+The route logs operational failures with stable event names only. It does not
+log raw prompts, full conversation history, API keys, or provider secrets.

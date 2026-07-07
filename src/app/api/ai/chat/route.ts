@@ -7,9 +7,11 @@ import { rateLimit, clientIp } from '@/lib/rate-limit';
 import { cacheGet, cacheSet } from '@/lib/cache';
 import { extractFilters } from '@/lib/ai/extract';
 import { searchProviders, type SearchedProvider } from '@/lib/ai/search';
-import { generateRecommendation, type ChatTurn } from '@/lib/ai/chat';
-import type { ChatRecommendation } from '@/lib/ai/prompt';
 import { logEvent } from '@/lib/logger';
+
+import { processChat, AssistantResponse } from '@/ai/gegarap-assistant';
+import { runSafetyClassifier } from '@/ai/gegarap-assistant/safety-classifier';
+import { fallbackRecommendation } from '@/lib/ai/prompt';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -18,7 +20,7 @@ const MAX_MESSAGE_LEN = 500;
 const CACHE_TTL_SECONDS = 300;
 
 interface ChatPayload {
-  recommendation: ChatRecommendation;
+  recommendation: AssistantResponse;
   providers: SearchedProvider[];
 }
 
@@ -33,11 +35,11 @@ function sanitize(raw: unknown): string | null {
   return clean.length > 0 ? clean : null;
 }
 
-function asHistory(raw: unknown): ChatTurn[] {
+function asHistory(raw: unknown): { role: 'user' | 'assistant'; content: string }[] {
   if (!Array.isArray(raw)) return [];
   return raw
     .filter(
-      (m): m is ChatTurn =>
+      (m): m is { role: 'user' | 'assistant'; content: string } =>
         !!m &&
         (m.role === 'user' || m.role === 'assistant') &&
         typeof m.content === 'string' &&
@@ -75,20 +77,41 @@ export async function POST(req: Request) {
     let mock = false;
 
     if (!payload) {
-      const providers = await searchProviders(message, filters);
-      const { recommendation, mock: m } = await generateRecommendation({
-        query: message,
-        providers,
-        history,
-      });
-      mock = m;
+      const safety = runSafetyClassifier(message);
+      const providers = safety.riskLevel === 'critical' ? [] : await searchProviders(message, filters);
+
+      let recommendation: AssistantResponse;
+      try {
+        recommendation = await processChat({
+          query: message,
+          history,
+          providers
+        });
+      } catch (e) {
+        logEvent('ai.chat.engine_failed', { error: String(e) }, 'warn');
+        mock = true;
+        const legacy = fallbackRecommendation(message, providers);
+        recommendation = {
+          message: legacy.pesan,
+          category: 'Lainnya',
+          riskLevel: 'low',
+          confidenceLevel: 'low',
+          bookingEligible: legacy.rekomendasi.length > 0,
+          suggestedNextAction: '',
+          pesan: legacy.pesan,
+          rekomendasi: legacy.rekomendasi,
+          catatan: legacy.catatan,
+          cta: legacy.cta
+        };
+      }
+
       payload = { recommendation, providers };
       await cacheSet(cacheKey, payload, CACHE_TTL_SECONDS);
     }
 
     const turns = [
       { role: 'user', content: message },
-      { role: 'assistant', content: payload.recommendation.pesan },
+      { role: 'assistant', content: payload.recommendation.message },
     ];
     let resolvedSessionId = sessionId;
     try {
@@ -117,6 +140,10 @@ export async function POST(req: Request) {
       }
     } catch (e) {
       logEvent('ai.chat.persist_failed', { error: String(e) }, 'warn');
+    }
+
+    if (process.env.NODE_ENV === 'production' && payload.recommendation.debug) {
+      delete payload.recommendation.debug;
     }
 
     return ok({

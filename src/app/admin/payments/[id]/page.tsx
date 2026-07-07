@@ -21,12 +21,13 @@ function Row({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
-export default async function AdminPaymentDetailPage({ params }: { params: { id: string } }) {
+export default async function AdminPaymentDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const admin = await requireAdmin();
   if (!admin) redirect('/');
 
   const payment = await prisma.payment.findUnique({
-    where: { id: params.id },
+    where: { id },
     include: {
       job: { include: { customer: true, provider: { include: { user: true } } } },
       events: { orderBy: { createdAt: 'asc' } },

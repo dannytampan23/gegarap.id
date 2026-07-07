@@ -19,11 +19,12 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
-export default async function ReceiptPage({ params }: { params: { id: string } }) {
+export default async function ReceiptPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const session = await getSession();
-  if (!session?.user?.id) redirect(`/login?redirect=/booking/${params.id}/receipt`);
+  if (!session?.user?.id) redirect(`/login?redirect=/booking/${id}/receipt`);
 
-  const data = await getReceiptData(params.id);
+  const data = await getReceiptData(id);
   if (!data || data.customerId !== session.user.id) notFound();
   // The nota documents a real payment — an unpaid booking has no receipt yet.
   if (!data.isPaid) redirect('/dashboard');

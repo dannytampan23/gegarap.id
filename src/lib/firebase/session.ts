@@ -22,7 +22,7 @@ export interface AppSession {
 
 /** Verify the session cookie and return only the uid (cheap, no DB hit). */
 export async function getSessionUid(): Promise<string | null> {
-  const cookie = cookies().get(SESSION_COOKIE)?.value;
+  const cookie = (await cookies()).get(SESSION_COOKIE)?.value;
   if (!cookie) return null;
   try {
     const decoded = await adminAuth.verifySessionCookie(cookie, true);
@@ -39,7 +39,7 @@ export async function getSessionUid(): Promise<string | null> {
  * (the authoritative domain record); `image` from the Firebase token.
  */
 export async function getSession(): Promise<AppSession | null> {
-  const cookie = cookies().get(SESSION_COOKIE)?.value;
+  const cookie = (await cookies()).get(SESSION_COOKIE)?.value;
   if (!cookie) return null;
 
   let decoded;

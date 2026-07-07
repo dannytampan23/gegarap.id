@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next';
-import { Inter } from 'next/font/google';
+import localFont from 'next/font/local';
 import Script from 'next/script';
 import './globals.css';
 import { Navbar } from '@/components/layout/Navbar';
@@ -14,8 +14,8 @@ const MIDTRANS_SNAP_SRC =
     : 'https://app.sandbox.midtrans.com/snap/snap.js';
 const MIDTRANS_CLIENT_KEY = process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY;
 
-const inter = Inter({
-  subsets: ['latin'],
+const inter = localFont({
+  src: './fonts/GeistVF.woff',
   variable: '--font-inter',
   display: 'swap',
 });

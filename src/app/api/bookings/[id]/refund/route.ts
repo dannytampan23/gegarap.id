@@ -22,8 +22,9 @@ const REFUNDABLE = ['PAID', 'HELD'];
  * auto-refund, dispute (admin review), or reject. All state changes go through
  * the backend state machine and are audit-logged.
  */
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   return handle(async () => {
+    const { id } = await params;
     const session = await getSession();
     if (!session?.user?.id) return fail('Harus login.', 401);
 
@@ -32,7 +33,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     const input = refundSchema.parse(body);
 
     const job = await prisma.job.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: { payment: true },
     });
     if (!job || job.customerId !== session.user.id) return fail('Booking tidak ditemukan.', 404);

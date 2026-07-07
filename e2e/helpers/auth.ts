@@ -10,7 +10,8 @@ import { Page, expect } from '@playwright/test';
  * The legacy `local` argument is accepted for backward compatibility but ignored
  * (every call now provisions its own throwaway customer).
  */
-export async function loginWithPhone(page: Page, _local?: string) {
+export async function loginWithPhone(page: Page, local?: string) {
+  void local;
   const unique = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
   const email = `e2e-${unique}@test.gegarap.id`;
   // National part: 81 + 8 digits → +62 81xxxxxxxx (passes the ID phone regex).

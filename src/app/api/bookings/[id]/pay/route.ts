@@ -10,13 +10,14 @@ import { logEvent } from '@/lib/logger';
  * FRESH order id + token each call so a stale/expired token never blocks payment;
  * the webhook matches on the latest stored `midtransOrderId`. Customer-only.
  */
-export async function POST(_req: Request, { params }: { params: { id: string } }) {
+export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   return handle(async () => {
+    const { id } = await params;
     const session = await getSession();
     if (!session?.user?.id) return fail('Harus login untuk membayar.', 401);
 
     const job = await prisma.job.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: { payment: true, provider: { select: { category: true, user: { select: { name: true } } } } },
     });
     if (!job || !job.payment) return fail('Booking tidak ditemukan.', 404);

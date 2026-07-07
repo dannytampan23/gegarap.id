@@ -10,7 +10,6 @@ const nextConfig = {
   // Enable the `src/instrumentation.ts` hook (Sentry init, Bagian 10). On
   // Next 14.2 this is still behind an experimental flag (default from 15).
   experimental: {
-    instrumentationHook: true,
     // Barrel-import tree-shaking. framer-motion (and lucide-react) re-export
     // hundreds of symbols from a single entry; without this, importing one icon
     // can pull the whole module graph into a route's chunk. This rewrites the
@@ -23,8 +22,8 @@ const nextConfig = {
     // and throws ERR_REQUIRE_ESM. Externalizing leaves it as a native node
     // require from node_modules (nft traces it into the lambda). Fixes every
     // server route that touches Firebase Admin (auth/session/providers/etc.).
-    serverComponentsExternalPackages: ['firebase-admin'],
   },
+  serverExternalPackages: ['firebase-admin'],
   // Security + isolation headers applied to every response.
   //
   // COOP: `same-origin-allow-popups` (not the stricter `same-origin`) so

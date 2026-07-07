@@ -11,13 +11,14 @@ export const dynamic = 'force-dynamic';
  * GET /api/bookings/:id/receipt — stream the DP nota as a PDF. Owner-only, and
  * only once the DP is actually paid (the nota documents a real payment).
  */
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
+export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const session = await getSession();
   if (!session?.user?.id) {
     return new Response('Unauthorized', { status: 401 });
   }
 
-  const data = await getReceiptData(params.id);
+  const data = await getReceiptData(id);
   if (!data || data.customerId !== session.user.id) {
     return new Response('Not found', { status: 404 });
   }

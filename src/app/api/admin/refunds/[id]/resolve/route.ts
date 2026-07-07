@@ -21,8 +21,9 @@ const resolveSchema = z.object({
  * to the provider (dispute) or REFUND_REJECTED (refund review). Every action is
  * audit-logged with the admin's id.
  */
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   return handle(async () => {
+    const { id } = await params;
     const admin = await requireAdmin();
     if (!admin) return fail('Akses ditolak.', 403);
     const adminId = admin.id;
@@ -32,7 +33,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     const input = resolveSchema.parse(body);
 
     const rr = await prisma.refundRequest.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         payment: {
           include: { job: { include: { customer: true, provider: { include: { user: true } } } } },

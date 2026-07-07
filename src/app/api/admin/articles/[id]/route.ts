@@ -25,8 +25,9 @@ const AUDIT_FOR: Record<string, string> = {
 };
 
 /** PATCH /api/admin/articles/:id — change publication status. */
-export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   return handle(async () => {
+    const { id } = await params;
     const admin = await requireAdmin();
     if (!admin) return fail('Akses ditolak.', 403);
 
@@ -35,7 +36,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     const { status } = patchSchema.parse(body);
 
     const existing = await prisma.article.findUnique({
-      where: { id: params.id },
+      where: { id },
       select: { id: true, title: true, status: true, publishedAt: true },
     });
     if (!existing) return fail('Artikel tidak ditemukan.', 404);
@@ -66,13 +67,14 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 }
 
 /** DELETE /api/admin/articles/:id — remove an article. */
-export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   return handle(async () => {
+    const { id } = await params;
     const admin = await requireAdmin();
     if (!admin) return fail('Akses ditolak.', 403);
 
     const existing = await prisma.article.findUnique({
-      where: { id: params.id },
+      where: { id },
       select: { id: true, title: true, slug: true },
     });
     if (!existing) return fail('Artikel tidak ditemukan.', 404);

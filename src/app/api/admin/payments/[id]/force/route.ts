@@ -18,8 +18,9 @@ const forceSchema = z.object({
  * a MANDATORY reason (Bagian 12.6). Every action is audit-logged and goes through
  * the state machine, so it's reconstructable from PaymentEvent + AuditLog.
  */
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   return handle(async () => {
+    const { id } = await params;
     const admin = await requireAdmin();
     if (!admin) return fail('Akses ditolak.', 403);
 
@@ -27,7 +28,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     if (!body) return fail('Body permintaan tidak valid.', 400);
     const input = forceSchema.parse(body);
 
-    const payment = await prisma.payment.findUnique({ where: { id: params.id } });
+    const payment = await prisma.payment.findUnique({ where: { id } });
     if (!payment) return fail('Pembayaran tidak ditemukan.', 404);
     const current = payment.status as PaymentStatus;
 
