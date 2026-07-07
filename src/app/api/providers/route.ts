@@ -6,6 +6,7 @@ import { onboardingSchema } from '@/lib/validations';
 import { PROVIDER_PUBLIC_SELECT, toPublicProvider } from '@/lib/providers';
 import { rateLimit, clientIp, recordRateLimitBreach } from '@/lib/rate-limit';
 import { logAlert, notifyOps } from '@/lib/logger';
+import { hashNik, nikLast4 } from '@/lib/provider-verification';
 
 export async function GET(req: Request) {
   return handle(async () => {
@@ -65,7 +66,17 @@ export async function POST(req: Request) {
           dailyRate: input.dailyRate,
           goPayNumber: input.goPayNumber,
           bio: input.bio || null,
-          ktpImageUrl: input.ktpImageUrl ?? undefined,
+          nik: null,
+          nikHash: hashNik(input.nik),
+          nikLast4: nikLast4(input.nik),
+          identityStatus: 'IDENTITY_SUBMITTED',
+          identitySubmittedAt: new Date(),
+          identityVerifiedAt: null,
+          identityRejectedReason: null,
+          verifiedByAdminId: null,
+          ktpImageUrl: null,
+          faceImageUrl: null,
+          certificateUrl: null,
           // Re-submitting after a rejection puts the profile back in review.
           kycStatus: 'PENDING',
           kycReason: null,
@@ -77,7 +88,14 @@ export async function POST(req: Request) {
           dailyRate: input.dailyRate,
           goPayNumber: input.goPayNumber,
           bio: input.bio || null,
-          ktpImageUrl: input.ktpImageUrl ?? null,
+          nik: null,
+          nikHash: hashNik(input.nik),
+          nikLast4: nikLast4(input.nik),
+          identityStatus: 'IDENTITY_SUBMITTED',
+          identitySubmittedAt: new Date(),
+          ktpImageUrl: null,
+          faceImageUrl: null,
+          certificateUrl: null,
           isVerified: false, // pending KYC review
           kycStatus: 'PENDING',
         },

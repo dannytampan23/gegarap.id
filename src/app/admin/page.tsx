@@ -30,7 +30,7 @@ export default async function AdminPage() {
           Verifikasi KYC Tukang
         </h1>
         <p className="mt-2 text-base text-muted-foreground sm:text-lg">
-          Tinjau dokumen KTP dan data pencairan tukang yang menunggu persetujuan. Hanya tukang yang
+          Tinjau data identitas dan pencairan tukang yang menunggu persetujuan. Hanya tukang yang
           disetujui yang tampil di marketplace.
         </p>
         <div className="mt-4 flex flex-wrap gap-2.5">

@@ -4,13 +4,12 @@ import * as React from 'react';
 import { produce } from 'immer';
 import { useRouter } from 'next/navigation';
 import {
-  UploadCloud,
-  Loader2,
-  X,
   ArrowLeft,
   ArrowRight,
   CheckCircle2,
-  FileText,
+  IdCard,
+  Loader2,
+  LockKeyhole,
   ShieldCheck,
 } from 'lucide-react';
 import { useSession } from '@/components/providers/AuthProvider';
@@ -29,58 +28,39 @@ import {
 } from '@/lib/validations';
 import { StepIndicator } from './StepIndicator';
 
-const STEPS = ['Data Diri', 'Keahlian', 'Lokasi', 'Dokumen', 'Review'] as const;
+const STEPS = ['Data Diri', 'Keahlian', 'Lokasi', 'Review'] as const;
 const MAX_DISTRICTS = 5;
 const MAX_CATEGORIES = 5;
-
-type DocKind = 'ktp' | 'face' | 'certificate';
 
 interface Data {
   name: string;
   nik: string;
-  ktpImageUrl: string;
   categories: string[];
   experienceYears: number;
   dailyRate: number;
   districts: string[];
   serviceRadiusKm: number;
-  faceImageUrl: string;
-  certificateUrl: string;
 }
 
 interface State {
   step: number;
   data: Data;
-  previews: Partial<Record<DocKind, string>>;
-  uploading: Partial<Record<DocKind, boolean>>;
   errors: Record<string, string>;
   consent: boolean;
   submitting: boolean;
 }
-
-type DocField = 'ktpImageUrl' | 'faceImageUrl' | 'certificateUrl';
-const DOC_FIELD: Record<DocKind, DocField> = {
-  ktp: 'ktpImageUrl',
-  face: 'faceImageUrl',
-  certificate: 'certificateUrl',
-};
 
 const initialState: State = {
   step: 0,
   data: {
     name: '',
     nik: '',
-    ktpImageUrl: '',
     categories: [],
     experienceYears: 0,
     dailyRate: 150_000,
     districts: [],
     serviceRadiusKm: 10,
-    faceImageUrl: '',
-    certificateUrl: '',
   },
-  previews: {},
-  uploading: {},
   errors: {},
   consent: false,
   submitting: false,
@@ -89,18 +69,12 @@ const initialState: State = {
 type Action =
   | { type: 'PATCH'; patch: Partial<Data>; clearKeys?: string[] }
   | { type: 'TOGGLE_IN_ARRAY'; key: 'categories' | 'districts'; value: string; max: number }
-  | { type: 'SET_PREVIEW'; kind: DocKind; url: string | null }
-  | { type: 'SET_UPLOADING'; kind: DocKind; value: boolean }
-  | { type: 'SET_DOC'; kind: DocKind; path: string }
-  | { type: 'CLEAR_DOC'; kind: DocKind }
   | { type: 'SET_ERRORS'; errors: Record<string, string> }
-  | { type: 'CLEAR_ERROR'; key: string }
   | { type: 'NEXT' }
   | { type: 'BACK' }
   | { type: 'SET_CONSENT'; value: boolean }
   | { type: 'SET_SUBMITTING'; value: boolean };
 
-// useReducer + immer: every case mutates the draft; immer produces the next state.
 const reducer = (state: State, action: Action): State =>
   produce(state, (draft) => {
     switch (action.type) {
@@ -116,26 +90,8 @@ const reducer = (state: State, action: Action): State =>
         delete draft.errors[action.key];
         break;
       }
-      case 'SET_PREVIEW':
-        if (action.url) draft.previews[action.kind] = action.url;
-        else delete draft.previews[action.kind];
-        break;
-      case 'SET_UPLOADING':
-        draft.uploading[action.kind] = action.value;
-        break;
-      case 'SET_DOC':
-        draft.data[DOC_FIELD[action.kind]] = action.path;
-        delete draft.errors[DOC_FIELD[action.kind] as string];
-        break;
-      case 'CLEAR_DOC':
-        draft.data[DOC_FIELD[action.kind]] = '';
-        delete draft.previews[action.kind];
-        break;
       case 'SET_ERRORS':
         draft.errors = action.errors;
-        break;
-      case 'CLEAR_ERROR':
-        delete draft.errors[action.key];
         break;
       case 'NEXT':
         draft.step = Math.min(draft.step + 1, STEPS.length - 1);
@@ -154,9 +110,8 @@ const reducer = (state: State, action: Action): State =>
     }
   });
 
-/** Map state → schema input (optional empty doc becomes undefined). */
 function toParseInput(d: Data) {
-  return { ...d, certificateUrl: d.certificateUrl || undefined };
+  return { ...d };
 }
 
 export default function StepForm() {
@@ -168,7 +123,6 @@ export default function StepForm() {
 
   const { step, data, errors } = state;
 
-  // Prefill display name from the session once available.
   React.useEffect(() => {
     const n = session?.user?.name;
     if (n && !data.name && n !== session?.user?.phone) {
@@ -176,33 +130,9 @@ export default function StepForm() {
     }
   }, [session, data.name]);
 
-  async function uploadDoc(kind: DocKind, file: File) {
-    dispatch({ type: 'SET_PREVIEW', kind, url: URL.createObjectURL(file) });
-    dispatch({ type: 'SET_UPLOADING', kind, value: true });
-    try {
-      const fd = new FormData();
-      fd.append('file', file);
-      fd.append('kind', kind);
-      const res = await fetch('/api/upload', { method: 'POST', body: fd });
-      const json = await res.json();
-      if (res.ok && json.ok) {
-        dispatch({ type: 'SET_DOC', kind, path: json.url });
-        toast.success('Dokumen terupload');
-      } else {
-        toast.error('Upload gagal', json.message ?? 'Coba lagi.');
-        dispatch({ type: 'SET_PREVIEW', kind, url: null });
-      }
-    } catch {
-      toast.error('Koneksi bermasalah', 'Tidak dapat mengunggah dokumen.');
-      dispatch({ type: 'SET_PREVIEW', kind, url: null });
-    } finally {
-      dispatch({ type: 'SET_UPLOADING', kind, value: false });
-    }
-  }
-
   function validateStep(target: number): boolean {
     const schema = kycStepSchemas[target];
-    if (!schema) return true; // step 5 (Review) has no field schema
+    if (!schema) return true;
     const parsed = schema.safeParse(toParseInput(data));
     if (!parsed.success) {
       dispatch({ type: 'SET_ERRORS', errors: fieldErrors(parsed.error) });
@@ -237,7 +167,6 @@ export default function StepForm() {
         toast.error('Pendaftaran gagal', json.message ?? 'Silakan coba lagi.');
         return;
       }
-      // Refresh the session so the role flips to PROVIDER without a re-login.
       await refreshSession();
       setDone(true);
     } catch {
@@ -263,11 +192,28 @@ export default function StepForm() {
         <StepIndicator steps={[...STEPS]} current={step} />
 
         <div className="mt-8 space-y-5">
-          {/* ── Step 1 · Data Diri ── */}
           {step === 0 && (
             <>
-              <Field label="Nama Lengkap" required error={errors.name}>
+              <div className="rounded-xl border border-primary/20 bg-primary-light/40 p-4">
+                <div className="flex items-start gap-3">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-card text-primary">
+                    <LockKeyhole className="h-4.5 w-4.5" />
+                  </span>
+                  <div className="space-y-1">
+                    <p className="text-sm font-semibold text-foreground">
+                      Gegarap tidak menyimpan foto KTP untuk mengurangi risiko penyalahgunaan data.
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      NIK digunakan untuk proses verifikasi internal dan tidak akan ditampilkan ke
+                      pelanggan.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <Field label="Nama Lengkap" htmlFor="provider-name" required error={errors.name}>
                 <Input
+                  id="provider-name"
                   value={data.name}
                   onChange={(e) =>
                     dispatch({ type: 'PATCH', patch: { name: e.target.value }, clearKeys: ['name'] })
@@ -276,11 +222,20 @@ export default function StepForm() {
                   invalid={!!errors.name}
                 />
               </Field>
-              <Field label="NIK (16 digit)" required error={errors.nik}>
+
+              <Field
+                label="NIK"
+                htmlFor="provider-nik"
+                required
+                error={errors.nik}
+                hint="Masukkan 16 digit angka tanpa spasi."
+              >
                 <Input
+                  id="provider-nik"
                   value={data.nik}
                   inputMode="numeric"
                   maxLength={16}
+                  leftIcon={<IdCard className="h-4 w-4" />}
                   onChange={(e) =>
                     dispatch({
                       type: 'PATCH',
@@ -292,20 +247,9 @@ export default function StepForm() {
                   invalid={!!errors.nik}
                 />
               </Field>
-              <UploadBox
-                kind="ktp"
-                label="Foto KTP"
-                required
-                hint="Untuk verifikasi identitas. PNG/JPG hingga 5MB."
-                state={state}
-                onPick={uploadDoc}
-                onClear={() => dispatch({ type: 'CLEAR_DOC', kind: 'ktp' })}
-                error={errors.ktpImageUrl}
-              />
             </>
           )}
 
-          {/* ── Step 2 · Keahlian ── */}
           {step === 1 && (
             <>
               <Field
@@ -325,6 +269,7 @@ export default function StepForm() {
               <div className="grid gap-5 sm:grid-cols-2">
                 <Field label="Pengalaman (tahun)" required error={errors.experienceYears}>
                   <Input
+                    id="provider-experience"
                     type="number"
                     min={0}
                     max={60}
@@ -341,11 +286,13 @@ export default function StepForm() {
                 </Field>
                 <Field
                   label="Tarif Harian (Rp)"
+                  htmlFor="provider-daily-rate"
                   required
                   error={errors.dailyRate}
                   hint="Wajib agar profil bisa dibooking."
                 >
                   <Input
+                    id="provider-daily-rate"
                     type="number"
                     min={50000}
                     step={10000}
@@ -364,7 +311,6 @@ export default function StepForm() {
             </>
           )}
 
-          {/* ── Step 3 · Lokasi ── */}
           {step === 2 && (
             <>
               <Field
@@ -383,11 +329,13 @@ export default function StepForm() {
               </Field>
               <Field
                 label="Radius Layanan (km)"
+                htmlFor="provider-service-radius"
                 required
                 error={errors.serviceRadiusKm}
                 hint="Seberapa jauh Anda bersedia menerima pekerjaan."
               >
                 <Input
+                  id="provider-service-radius"
                   type="number"
                   min={1}
                   max={50}
@@ -405,51 +353,23 @@ export default function StepForm() {
             </>
           )}
 
-          {/* ── Step 4 · Dokumen ── */}
           {step === 3 && (
-            <>
-              <UploadBox
-                kind="face"
-                label="Foto Wajah"
-                required
-                hint="Selfie jelas untuk verifikasi liveness. PNG/JPG hingga 5MB."
-                state={state}
-                onPick={uploadDoc}
-                onClear={() => dispatch({ type: 'CLEAR_DOC', kind: 'face' })}
-                error={errors.faceImageUrl}
-              />
-              <UploadBox
-                kind="certificate"
-                label="Sertifikat (opsional)"
-                hint="Sertifikat keahlian jika ada. PNG/JPG/PDF hingga 5MB."
-                accept="image/jpeg,image/png,application/pdf"
-                state={state}
-                onPick={uploadDoc}
-                onClear={() => dispatch({ type: 'CLEAR_DOC', kind: 'certificate' })}
-                error={errors.certificateUrl}
-              />
-              <div className="flex items-center gap-2 rounded-xl border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
-                <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" />
-                Foto KTP sudah diunggah di langkah 1.
-              </div>
-            </>
-          )}
-
-          {/* ── Step 5 · Review & Kirim ── */}
-          {step === 4 && (
             <div className="space-y-5">
-              <h2 className="text-lg font-bold text-foreground">Tinjau data Anda</h2>
+              <div>
+                <h2 className="text-lg font-bold text-foreground">Tinjau data Anda</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Setelah dikirim, status identitas Anda menjadi Identitas diajukan sampai admin
+                  meninjau data.
+                </p>
+              </div>
               <dl className="divide-y divide-border rounded-xl border border-border">
                 <Row label="Nama" value={data.name} />
                 <Row label="NIK" value={maskNik(data.nik)} />
-                <Row label="Keahlian" value={data.categories.join(', ') || '—'} />
+                <Row label="Keahlian" value={data.categories.join(', ') || '-'} />
                 <Row label="Pengalaman" value={`${data.experienceYears} tahun`} />
                 <Row label="Tarif harian" value={`Rp ${data.dailyRate.toLocaleString('id-ID')}`} />
-                <Row label="Kecamatan" value={data.districts.join(', ') || '—'} />
+                <Row label="Kecamatan" value={data.districts.join(', ') || '-'} />
                 <Row label="Radius layanan" value={`${data.serviceRadiusKm} km`} />
-                <Row label="Foto KTP" value={data.ktpImageUrl ? 'Terlampir' : '—'} />
-                <Row label="Foto wajah" value={data.faceImageUrl ? 'Terlampir' : '—'} />
-                <Row label="Sertifikat" value={data.certificateUrl ? 'Terlampir' : 'Tidak ada'} />
               </dl>
 
               <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-border bg-muted/30 p-4">
@@ -460,16 +380,14 @@ export default function StepForm() {
                   className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
                 />
                 <span className="text-sm text-foreground">
-                  Saya menyatakan seluruh data di atas benar dan menyetujui{' '}
-                  <span className="font-semibold">Syarat &amp; Ketentuan</span> serta proses
-                  verifikasi KYC gegarap.id.
+                  Saya menyatakan data di atas benar dan menyetujui proses verifikasi internal
+                  gegarap.id.
                 </span>
               </label>
             </div>
           )}
         </div>
 
-        {/* ── Navigation ── */}
         <div className="mt-8 flex items-center justify-between gap-3">
           <Button
             type="button"
@@ -489,10 +407,10 @@ export default function StepForm() {
               onClick={handleSubmit}
             >
               <ShieldCheck className="h-4 w-4" />
-              {state.submitting ? 'Mengirim…' : 'Kirim untuk Verifikasi'}
+              {state.submitting ? 'Mengirim...' : 'Kirim untuk Verifikasi'}
             </Button>
           ) : (
-            <Button type="button" onClick={next} disabled={isStepBusy(state)}>
+            <Button type="button" onClick={next}>
               Lanjut <ArrowRight className="h-4 w-4" />
             </Button>
           )}
@@ -507,10 +425,10 @@ export default function StepForm() {
         <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary-light">
           <CheckCircle2 className="h-9 w-9 text-primary" />
         </div>
-        <h2 className="text-2xl font-bold tracking-tight text-foreground">Profil Terkirim! 🎉</h2>
+        <h2 className="text-2xl font-bold tracking-tight text-foreground">Profil Terkirim</h2>
         <p className="mt-2 text-muted-foreground">
           Terima kasih, <span className="font-semibold text-foreground">{data.name || 'Mitra'}</span>.
-          Tim kami akan meninjau verifikasi KYC Anda dalam 1–2 hari kerja.
+          Tim kami akan meninjau verifikasi identitas Anda.
         </p>
         <Button size="lg" className="mt-6 w-full" onClick={() => router.push('/provider/dashboard')}>
           Lihat Dashboard
@@ -520,16 +438,9 @@ export default function StepForm() {
   );
 }
 
-/** Disable "Lanjut" while a document on the current step is still uploading. */
-function isStepBusy(state: State): boolean {
-  if (state.step === 0) return !!state.uploading.ktp;
-  if (state.step === 3) return !!state.uploading.face || !!state.uploading.certificate;
-  return false;
-}
-
 function maskNik(nik: string): string {
-  if (nik.length < 16) return nik || '—';
-  return `${nik.slice(0, 4)}••••••••${nik.slice(-4)}`;
+  if (nik.length < 16) return nik || '-';
+  return `************${nik.slice(-4)}`;
 }
 
 function Row({ label, value }: { label: string; value: string }) {
@@ -572,84 +483,5 @@ function ChipGroup({
         );
       })}
     </div>
-  );
-}
-
-function UploadBox({
-  kind,
-  label,
-  hint,
-  required,
-  accept = 'image/jpeg,image/png',
-  state,
-  onPick,
-  onClear,
-  error,
-}: {
-  kind: DocKind;
-  label: string;
-  hint?: string;
-  required?: boolean;
-  accept?: string;
-  state: State;
-  onPick: (kind: DocKind, file: File) => void;
-  onClear: () => void;
-  error?: string;
-}) {
-  const preview = state.previews[kind];
-  const uploading = state.uploading[kind];
-  const uploaded = !!state.data[DOC_FIELD[kind]];
-  const isImagePreview = preview?.startsWith('blob:') && accept.includes('image');
-
-  return (
-    <Field label={label} required={required} error={error} hint={!error ? hint : undefined}>
-      {uploaded || preview ? (
-        <div className="relative overflow-hidden rounded-xl border border-border">
-          {isImagePreview ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={preview}
-              alt={`Preview ${label}`}
-              className="mx-auto max-h-48 w-full bg-muted/30 object-contain"
-            />
-          ) : (
-            <div className="flex items-center gap-3 p-4">
-              <FileText className="h-6 w-6 text-primary" />
-              <span className="text-sm font-medium text-foreground">Dokumen terlampir</span>
-            </div>
-          )}
-          <button
-            type="button"
-            onClick={onClear}
-            className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-slate-900/70 text-white transition-colors hover:bg-slate-900"
-            aria-label={`Hapus ${label}`}
-          >
-            <X className="h-4 w-4" />
-          </button>
-          {uploading && (
-            <div className="absolute inset-0 flex items-center justify-center bg-card/70">
-              <Loader2 className="h-6 w-6 animate-spin text-primary" />
-            </div>
-          )}
-        </div>
-      ) : (
-        <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border bg-muted/30 px-6 py-8 text-center transition-colors hover:border-primary/40 hover:bg-muted/50">
-          <input
-            type="file"
-            accept={accept}
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) onPick(kind, file);
-            }}
-          />
-          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary-light text-primary">
-            {kind === 'certificate' ? <FileText className="h-5 w-5" /> : <UploadCloud className="h-5 w-5" />}
-          </span>
-          <span className="text-sm font-medium text-foreground">Klik untuk upload</span>
-          <span className="text-xs text-muted-foreground">{accept.includes('pdf') ? 'PNG, JPG, PDF' : 'PNG, JPG'} hingga 5MB</span>
-        </label>
-      )}
-    </Field>
   );
 }

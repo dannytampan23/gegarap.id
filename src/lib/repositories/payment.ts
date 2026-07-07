@@ -13,7 +13,7 @@ import prisma from '../prisma';
 
 /** The booking-replay include: payment + its job + provider display name. */
 const withJobAndProvider = {
-  job: { include: { provider: { include: { user: { select: { name: true } } } } } },
+  job: { include: { provider: { select: { user: { select: { name: true } } } } } },
 } as const;
 
 export const paymentRepository = {

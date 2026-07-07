@@ -1,6 +1,7 @@
 import prisma from '@/lib/prisma';
 import { ok, fail, handle } from '@/lib/api';
 import { requireAdmin } from '@/lib/admin-guard';
+import { maskNik } from '@/lib/provider-verification';
 
 // Auth-gated (reads session headers) — never prerender.
 export const dynamic = 'force-dynamic';
@@ -18,7 +19,9 @@ export async function GET() {
         category: true,
         districts: true,
         dailyRate: true,
-        ktpImageUrl: true, // only used to flag presence; never returned raw
+        nikLast4: true,
+        identityStatus: true,
+        payoutStatus: true,
         createdAt: true,
         user: { select: { name: true, phone: true } },
       },
@@ -33,7 +36,9 @@ export async function GET() {
       category: p.category,
       districts: p.districts,
       dailyRate: p.dailyRate,
-      hasKtp: Boolean(p.ktpImageUrl),
+      nikMasked: maskNik(p.nikLast4),
+      identityStatus: p.identityStatus,
+      payoutStatus: p.payoutStatus,
       createdAt: p.createdAt.toISOString(),
     }));
 

@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
-import { CheckCircle2, Clock, Wallet, Briefcase } from 'lucide-react';
+import { CheckCircle2, Clock, Wallet, Briefcase, IdCard, ShieldCheck } from 'lucide-react';
 import prisma from '@/lib/prisma';
 import { getSession } from '@/lib/firebase/session';
 import { Badge } from '@/components/ui/Badge';
@@ -8,6 +8,7 @@ import { StatCard } from '@/components/ui/StatCard';
 import { JobsTable, type JobRow } from '@/components/dashboard/JobsTable';
 import { isContactUnlocked } from '@/lib/authz';
 import { formatCurrency } from '@/lib/utils';
+import { maskNik } from '@/lib/provider-verification';
 
 export const metadata: Metadata = { title: 'Dashboard Tukang' };
 export const dynamic = 'force-dynamic';
@@ -20,6 +21,18 @@ export default async function ProviderDashboard() {
   // missing before (every provider could see every other provider's jobs + PII).
   const provider = await prisma.providerProfile.findUnique({
     where: { userId: session.user.id },
+    select: {
+      id: true,
+      category: true,
+      available: true,
+      identityStatus: true,
+      identitySubmittedAt: true,
+      identityVerifiedAt: true,
+      identityRejectedReason: true,
+      nikLast4: true,
+      payoutStatus: true,
+      payoutVerifiedAt: true,
+    },
   });
   if (!provider) redirect('/dashboard'); // not a provider → customer dashboard
 
@@ -83,6 +96,22 @@ export default async function ProviderDashboard() {
 
       <div className="mb-10 grid grid-cols-1 gap-5 sm:grid-cols-3">
         <StatCard
+          label="Status Identitas"
+          value={identityStatusLabel(provider.identityStatus)}
+          icon={<ShieldCheck className="h-5 w-5" />}
+          hint={`NIK ${maskNik(provider.nikLast4)}`}
+        />
+        <StatCard
+          label="Status Rekening"
+          value={payoutStatusLabel(provider.payoutStatus)}
+          icon={<IdCard className="h-5 w-5" />}
+          hint={
+            provider.payoutVerifiedAt
+              ? `Diverifikasi ${provider.payoutVerifiedAt.toLocaleDateString('id-ID')}`
+              : 'Belum diverifikasi'
+          }
+        />
+        <StatCard
           label="Pekerjaan Selesai"
           value={String(stats.completed)}
           icon={<CheckCircle2 className="h-5 w-5" />}
@@ -92,10 +121,19 @@ export default async function ProviderDashboard() {
           value={String(stats.active)}
           icon={<Clock className="h-5 w-5" />}
         />
+      </div>
+
+      <div className="mb-10 grid grid-cols-1 gap-5 sm:grid-cols-2">
         <StatCard
           label="Total Pendapatan"
           value={formatCurrency(stats.earnings)}
           icon={<Wallet className="h-5 w-5" />}
+        />
+        <StatCard
+          label="Status Pendaftaran"
+          value={provider.available ? 'Aktif menerima booking' : 'Tidak tersedia'}
+          icon={<CheckCircle2 className="h-5 w-5" />}
+          hint="Status ketersediaan dapat dipakai untuk mengatur jadwal kerja."
         />
       </div>
 
@@ -107,4 +145,34 @@ export default async function ProviderDashboard() {
       <JobsTable jobs={rows} />
     </div>
   );
+}
+
+function identityStatusLabel(status: string): string {
+  switch (status) {
+    case 'PHONE_VERIFIED':
+      return 'Nomor HP terverifikasi';
+    case 'IDENTITY_SUBMITTED':
+      return 'Identitas diajukan';
+    case 'MANUALLY_VERIFIED':
+      return 'Terverifikasi Gegarap';
+    case 'REJECTED':
+      return 'Ditolak';
+    case 'SUSPENDED':
+      return 'Ditangguhkan';
+    default:
+      return 'Belum diverifikasi';
+  }
+}
+
+function payoutStatusLabel(status: string): string {
+  switch (status) {
+    case 'SUBMITTED':
+      return 'Rekening diajukan';
+    case 'VERIFIED':
+      return 'Rekening terverifikasi';
+    case 'REJECTED':
+      return 'Rekening ditolak';
+    default:
+      return 'Belum diverifikasi';
+  }
 }

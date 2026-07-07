@@ -139,7 +139,7 @@ export default async function ArtikelDetailPage({ params }: { params: { slug: st
       <div className="my-10 rounded-2xl border border-primary/20 bg-primary-light/50 p-6 text-center">
         <p className="text-lg font-bold text-foreground">Butuh bantuan profesional?</p>
         <p className="mx-auto mt-1.5 max-w-md text-sm text-muted-foreground">
-          Temukan {article.category} terverifikasi KTP di {article.location} dengan harga
+          Temukan {article.category} terverifikasi Gegarap di {article.location} dengan harga
           transparan, langsung dari aplikasi.
         </p>
         <Link

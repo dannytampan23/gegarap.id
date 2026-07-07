@@ -1,16 +1,10 @@
 import prisma from '@/lib/prisma';
 import { ok, fail, handle } from '@/lib/api';
 import { requireAdmin } from '@/lib/admin-guard';
-import { getKtpSignedUrl } from '@/lib/storage';
+import { maskNik } from '@/lib/provider-verification';
 
-// Auth-gated (reads session headers) — never prerender.
 export const dynamic = 'force-dynamic';
 
-/**
- * GET /api/admin/providers/:id — full KYC review detail for one provider,
- * including payout details and a short-lived signed URL to preview the KTP.
- * The signed URL (≈2 min TTL) is minted on demand and never persisted.
- */
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
   return handle(async () => {
     const admin = await requireAdmin();
@@ -31,14 +25,19 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
         kycStatus: true,
         kycReason: true,
         kycReviewedAt: true,
-        ktpImageUrl: true,
+        nikLast4: true,
+        identityStatus: true,
+        identitySubmittedAt: true,
+        identityVerifiedAt: true,
+        identityRejectedReason: true,
+        phoneVerifiedAt: true,
+        payoutStatus: true,
+        payoutVerifiedAt: true,
         createdAt: true,
         user: { select: { name: true, phone: true, email: true } },
       },
     });
     if (!profile) return fail('Profil tukang tidak ditemukan.', 404);
-
-    const ktpUrl = await getKtpSignedUrl(profile.ktpImageUrl);
 
     return ok({
       id: profile.id,
@@ -56,8 +55,14 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       kycStatus: profile.kycStatus,
       kycReason: profile.kycReason,
       kycReviewedAt: profile.kycReviewedAt?.toISOString() ?? null,
-      hasKtp: Boolean(profile.ktpImageUrl),
-      ktpUrl, // short-lived signed URL (or null) — for preview only
+      nikMasked: maskNik(profile.nikLast4),
+      identityStatus: profile.identityStatus,
+      identitySubmittedAt: profile.identitySubmittedAt?.toISOString() ?? null,
+      identityVerifiedAt: profile.identityVerifiedAt?.toISOString() ?? null,
+      identityRejectedReason: profile.identityRejectedReason,
+      phoneVerifiedAt: profile.phoneVerifiedAt?.toISOString() ?? null,
+      payoutStatus: profile.payoutStatus,
+      payoutVerifiedAt: profile.payoutVerifiedAt?.toISOString() ?? null,
       createdAt: profile.createdAt.toISOString(),
     });
   })();

@@ -11,7 +11,11 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
 
     const profile = await prisma.providerProfile.findUnique({
       where: { id: params.id },
-      include: { user: { select: { name: true, phone: true } } },
+      select: {
+        id: true,
+        category: true,
+        user: { select: { name: true, phone: true } },
+      },
     });
     if (!profile) return fail('Profil tukang tidak ditemukan.', 404);
 
@@ -23,6 +27,10 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
         kycReason: null,
         kycReviewedAt: new Date(),
         kycReviewedById: admin.id,
+        identityStatus: 'MANUALLY_VERIFIED',
+        identityVerifiedAt: new Date(),
+        identityRejectedReason: null,
+        verifiedByAdminId: admin.id,
       },
     });
 
@@ -34,6 +42,11 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
       metadata: { name: profile.user.name, category: profile.category },
     });
 
-    return ok({ id: profile.id, kycStatus: 'APPROVED', isVerified: true });
+    return ok({
+      id: profile.id,
+      kycStatus: 'APPROVED',
+      identityStatus: 'MANUALLY_VERIFIED',
+      isVerified: true,
+    });
   })();
 }

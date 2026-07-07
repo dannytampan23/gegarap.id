@@ -1,7 +1,8 @@
+import type { VerificationBadge } from './provider-verification';
+
 /**
- * Client-safe provider shape for listings/cards. Intentionally has NO financial
- * fields (payout/gopay), NO KTP, and NO coordinates — see PROVIDER_PUBLIC_SELECT
- * in lib/providers.ts, which is the query this type mirrors.
+ * Client-safe provider shape for listings/cards. Intentionally has no financial
+ * fields, no KTP/NIK, and no exact coordinates.
  */
 export interface ProviderListItem {
   id: string;
@@ -14,13 +15,13 @@ export interface ProviderListItem {
   ratingCount: number;
   completedJobs: number;
   available: boolean;
+  verificationBadges: VerificationBadge[];
   user: { name: string };
 }
 
 /**
  * Client-safe provider shape for the marketplace map. Coordinates here are
- * always the fuzzed (~1 km) approximation produced by toMapProvider, never the
- * exact home location.
+ * always the fuzzed approximation produced by toMapProvider.
  */
 export interface ProviderMapItem {
   id: string;

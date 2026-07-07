@@ -105,7 +105,14 @@ export async function createBooking(
   // Provider must exist and be open for bookings (snapshot the rate now).
   const provider = await prisma.providerProfile.findUnique({
     where: { id: input.providerProfileId },
-    include: { user: { select: { name: true, phone: true } } },
+    select: {
+      id: true,
+      category: true,
+      dailyRate: true,
+      isVerified: true,
+      available: true,
+      user: { select: { name: true, phone: true } },
+    },
   });
   if (!provider || !provider.isVerified || !provider.available) {
     throw new BadRequestError('Tukang tidak tersedia.');

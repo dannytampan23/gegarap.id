@@ -14,7 +14,7 @@ const values = [
   {
     icon: Shield,
     title: 'Kepercayaan',
-    body: 'Setiap mitra melewati verifikasi KTP sebelum profilnya aktif. Anda memesan dengan tenang.',
+    body: 'Setiap mitra melewati verifikasi identitas internal sebelum profilnya aktif. Anda memesan dengan tenang.',
   },
   {
     icon: MapPin,

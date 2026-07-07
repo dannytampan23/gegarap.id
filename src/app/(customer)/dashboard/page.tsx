@@ -16,8 +16,19 @@ export default async function CustomerDashboard() {
 
   const jobs = await prisma.job.findMany({
     where: { customerId: session.user.id },
-    include: {
-      provider: { include: { user: { select: { name: true, phone: true } } } },
+    select: {
+      id: true,
+      description: true,
+      customerAddress: true,
+      district: true,
+      status: true,
+      scheduledDate: true,
+      timeSlot: true,
+      estimatedDays: true,
+      totalFee: true,
+      dpAmount: true,
+      createdAt: true,
+      provider: { select: { category: true, user: { select: { name: true, phone: true } } } },
       payment: { select: { status: true } },
       review: { select: { rating: true } },
     },

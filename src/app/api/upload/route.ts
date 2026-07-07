@@ -2,15 +2,9 @@ import { NextResponse } from 'next/server';
 import { getSession } from '@/lib/firebase/session';
 import { uploadPrivateDocument, type PrivateDocKind } from '@/lib/storage';
 
-/**
- * Generic private-document upload for the KYC wizard: `POST /api/upload` with a
- * multipart body of `{ file, kind }` where kind ∈ ktp | face | certificate.
- * Everything lands in the same private bucket as KTP and returns a storage PATH
- * (never a public URL) for the onboarding payload.
- */
 const ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf'];
-const MAX_BYTES = 5 * 1024 * 1024; // 5MB
-const KINDS: PrivateDocKind[] = ['ktp', 'face', 'certificate'];
+const MAX_BYTES = 5 * 1024 * 1024;
+const KINDS: PrivateDocKind[] = ['face', 'certificate'];
 
 export async function POST(req: Request) {
   const session = await getSession();
@@ -19,15 +13,21 @@ export async function POST(req: Request) {
   }
 
   const formData = await req.formData();
-  // Accept either `file` (spec) or `ktp` (back-compat) as the field name.
-  const file = formData.get('file') ?? formData.get('ktp');
-  const kindRaw = String(formData.get('kind') ?? 'ktp');
-  const kind = (KINDS as string[]).includes(kindRaw) ? (kindRaw as PrivateDocKind) : 'ktp';
+  const file = formData.get('file');
+  const kindRaw = String(formData.get('kind') ?? '');
+
+  if (!(KINDS as string[]).includes(kindRaw)) {
+    return NextResponse.json(
+      { ok: false, message: 'Jenis dokumen tidak didukung.' },
+      { status: 400 }
+    );
+  }
+  const kind = kindRaw as PrivateDocKind;
 
   if (!(file instanceof File)) {
     return NextResponse.json({ ok: false, message: 'File tidak ditemukan.' }, { status: 400 });
   }
-  // Certificates may be PDFs; identity photos must be images.
+
   const allowed = kind === 'certificate' ? ALLOWED_TYPES : ALLOWED_TYPES.slice(0, 3);
   if (!allowed.includes(file.type)) {
     return NextResponse.json(
@@ -39,6 +39,7 @@ export async function POST(req: Request) {
       { status: 400 }
     );
   }
+
   if (file.size > MAX_BYTES) {
     return NextResponse.json({ ok: false, message: 'Ukuran file maksimal 5MB.' }, { status: 400 });
   }

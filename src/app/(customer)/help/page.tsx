@@ -25,11 +25,11 @@ const faqs = [
   },
   {
     q: 'Bagaimana cara mendaftar sebagai mitra tukang?',
-    a: 'Buka halaman "Jadi Mitra", isi profil dan keahlian Anda, lalu unggah KTP untuk verifikasi. Setelah disetujui, profil Anda aktif dan siap menerima pekerjaan.',
+    a: 'Buka halaman "Jadi Mitra", isi profil, NIK, keahlian, dan area kerja Anda. Setelah ditinjau admin, profil yang disetujui akan aktif dan siap menerima pekerjaan.',
   },
   {
-    q: 'Apakah data KTP saya aman?',
-    a: 'Ya. KTP hanya digunakan untuk verifikasi identitas, disimpan terenkripsi, dan tidak pernah ditampilkan ke pengguna lain atau dijual ke pihak ketiga.',
+    q: 'Apakah gegarap.id menyimpan foto KTP?',
+    a: 'Tidak. Untuk MVP, gegarap.id tidak meminta atau menyimpan foto KTP. NIK digunakan untuk proses verifikasi internal dan tidak ditampilkan ke pelanggan.',
   },
   {
     q: 'Bisa bayar tanpa DP?',

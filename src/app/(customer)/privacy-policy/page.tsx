@@ -11,7 +11,7 @@ export const metadata = pageMetadata({
   path: '/privacy-policy',
 });
 
-const EFFECTIVE_DATE = '14 Juni 2026';
+const EFFECTIVE_DATE = '7 Juli 2026';
 
 const toc = [
   { id: 'data-dikumpulkan', label: 'Data yang Kami Kumpulkan' },
@@ -56,23 +56,23 @@ export default function PrivacyPolicyPage() {
 
         <Prose className="mt-8">
           <p>
-            gegarap.id (&quot;kami&quot;) menghubungkan warga Yogyakarta dengan tukang
-            terverifikasi. Kebijakan ini menjelaskan data apa yang kami kumpulkan, untuk apa kami
-            menggunakannya, dan bagaimana Anda dapat mengendalikannya.
+            gegarap.id menghubungkan warga Yogyakarta dengan tukang terverifikasi. Kebijakan ini
+            menjelaskan data apa yang kami kumpulkan, untuk apa kami menggunakannya, dan bagaimana
+            Anda dapat mengendalikannya.
           </p>
 
           <h2 id="data-dikumpulkan">1. Data yang Kami Kumpulkan</h2>
           <p>Kami hanya mengumpulkan data yang diperlukan untuk menjalankan layanan:</p>
           <ul>
             <li>
-              <strong>Identitas:</strong> nama lengkap dan alamat email (melalui akun Google Anda).
+              <strong>Identitas:</strong> nama lengkap dan alamat email.
             </li>
             <li>
               <strong>Kontak:</strong> nomor HP/WhatsApp untuk koordinasi pekerjaan.
             </li>
             <li>
-              <strong>Verifikasi mitra:</strong> foto KTP — khusus untuk calon tukang, demi
-              keamanan pengguna lain.
+              <strong>Verifikasi mitra:</strong> nama lengkap, NIK, status verifikasi, dan data
+              pencairan yang diperlukan untuk calon tukang.
             </li>
             <li>
               <strong>Lokasi:</strong> koordinat GPS atau alamat yang Anda masukkan untuk mencari
@@ -85,16 +85,15 @@ export default function PrivacyPolicyPage() {
           <ul>
             <li>Memverifikasi identitas mitra tukang sebelum profil diaktifkan.</li>
             <li>Mencocokkan kebutuhan Anda dengan tukang yang sesuai dan terdekat.</li>
-            <li>Memproses pembayaran DP secara aman melalui mitra pembayaran (Midtrans).</li>
+            <li>Memproses pembayaran DP secara aman melalui mitra pembayaran.</li>
             <li>Mengirim notifikasi status booking via email atau WhatsApp.</li>
           </ul>
 
           <h2 id="keamanan">3. Keamanan Data</h2>
           <p>
-            Data sensitif disimpan dengan enkripsi <em>at-rest</em> dan diakses hanya oleh sistem
-            yang berwenang. <strong>Kami tidak pernah menjual data Anda</strong> ke pihak ketiga.
-            Foto KTP digunakan semata-mata untuk verifikasi dan tidak ditampilkan kepada pengguna
-            lain.
+            Data sensitif diakses hanya oleh sistem dan admin yang berwenang.{' '}
+            <strong>Kami tidak pernah menjual data Anda</strong> ke pihak ketiga. gegarap.id tidak
+            meminta atau menyimpan foto KTP untuk onboarding mitra.
           </p>
 
           <h2 id="hak-pengguna">4. Hak Pengguna</h2>
@@ -118,8 +117,8 @@ export default function PrivacyPolicyPage() {
 
           <h2 id="cookie">5. Cookie</h2>
           <p>
-            Kami hanya menggunakan <em>session cookie</em> dari NextAuth untuk menjaga Anda tetap
-            masuk. Kami tidak memasang cookie pelacak (tracking) pihak ketiga untuk iklan.
+            Kami menggunakan session cookie untuk menjaga Anda tetap masuk. Kami tidak memasang
+            cookie pelacak pihak ketiga untuk iklan.
           </p>
 
           <h2 id="kontak">6. Kontak</h2>

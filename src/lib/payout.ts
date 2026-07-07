@@ -42,7 +42,21 @@ export function isPayoutEligible(provider: {
 export async function settleProviderPayout(paymentId: string): Promise<SettleResult> {
   const payment = await prisma.payment.findUnique({
     where: { id: paymentId },
-    include: { provider: { include: { user: true } } },
+    select: {
+      id: true,
+      providerProfileId: true,
+      providerAmount: true,
+      platformFee: true,
+      midtransOrderId: true,
+      provider: {
+        select: {
+          kycStatus: true,
+          payoutMethod: true,
+          payoutDetails: true,
+          user: { select: { phone: true } },
+        },
+      },
+    },
   });
   if (!payment) throw new Error(`Payment not found: ${paymentId}`);
   if (!payment.providerProfileId || !payment.provider) {

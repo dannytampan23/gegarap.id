@@ -74,7 +74,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Keep the httpOnly server session cookie in sync with the client session.
       // Without this, a client that's still signed in (Firebase persists auth in
       // IndexedDB and auto-refreshes) but whose server cookie expired/was cleared
-      // hits 401 on server routes (KTP upload, bookings, dashboard). Re-posting
+      // hits 401 on server routes (onboarding, bookings, dashboard). Re-posting
       // the fresh ID token re-mints the cookie so client and server never drift.
       if (u) {
         try {

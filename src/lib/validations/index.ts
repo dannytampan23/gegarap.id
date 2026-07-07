@@ -43,6 +43,8 @@ export const DISTRICTS = [
 export const TIME_SLOTS = ['pagi', 'siang', 'sore'] as const;
 
 export const MINIMUM_DP = 20_000;
+export const NIK_VALIDATION_MESSAGE = 'NIK harus terdiri dari 16 digit angka.';
+export const nikSchema = z.string().trim().regex(/^\d{16}$/, NIK_VALIDATION_MESSAGE);
 
 /**
  * Booking input. Customer identity (name/WhatsApp) is NOT here — it comes from
@@ -72,6 +74,7 @@ export type BookingInput = z.infer<typeof bookingSchema>;
  */
 export const onboardingSchema = z.object({
   name: z.string().trim().min(2, 'Nama minimal 2 karakter').max(80),
+  nik: nikSchema,
   category: z.enum(PROVIDER_CATEGORIES, { message: 'Pilih kategori keahlian' }),
   districts: z
     .array(z.string().trim().min(1))
@@ -83,9 +86,6 @@ export const onboardingSchema = z.object({
     .max(5_000_000, 'Tarif maksimal Rp 5.000.000'),
   goPayNumber: phoneSchema,
   bio: z.string().trim().max(500).optional().or(z.literal('')),
-  // Private-storage object PATH returned by /api/upload/ktp (no longer a public
-  // URL). Resolved to a signed URL only for admin KYC review.
-  ktpImageUrl: z.string().trim().min(1).max(300).optional(),
 });
 
 export type OnboardingInput = z.infer<typeof onboardingSchema>;
@@ -101,8 +101,7 @@ export type OnboardingInput = z.infer<typeof onboardingSchema>;
 export const kycOnboardingSchema = z.object({
   // Step 1 — Data Diri
   name: z.string().trim().min(2, 'Nama minimal 2 karakter').max(80),
-  nik: z.string().trim().regex(/^\d{16}$/, 'NIK harus tepat 16 digit angka'),
-  ktpImageUrl: z.string().trim().min(1, 'Upload foto KTP terlebih dahulu').max(300),
+  nik: nikSchema,
   // Step 2 — Keahlian
   categories: z
     .array(z.enum(PROVIDER_CATEGORIES))
@@ -128,8 +127,6 @@ export const kycOnboardingSchema = z.object({
     .min(1, 'Minimal 1 km')
     .max(50, 'Maksimal 50 km'),
   // Step 4 — Dokumen
-  faceImageUrl: z.string().trim().min(1, 'Upload foto wajah terlebih dahulu').max(300),
-  certificateUrl: z.string().trim().min(1).max(300).optional(),
 });
 
 export type KycOnboardingInput = z.infer<typeof kycOnboardingSchema>;
@@ -140,13 +137,12 @@ export type KycOnboardingInput = z.infer<typeof kycOnboardingSchema>;
  * wizard runs the matching schema before allowing "Lanjut".
  */
 export const kycStepSchemas = [
-  kycOnboardingSchema.pick({ name: true, nik: true, ktpImageUrl: true }),
+  kycOnboardingSchema.pick({ name: true, nik: true }),
   kycOnboardingSchema.pick({ categories: true, experienceYears: true, dailyRate: true }),
   kycOnboardingSchema.pick({ districts: true, serviceRadiusKm: true }),
-  kycOnboardingSchema.pick({ faceImageUrl: true, certificateUrl: true }),
 ] as const;
 
-export const KYC_STEP_COUNT = 5;
+export const KYC_STEP_COUNT = 4;
 
 export const contactSchema = z.object({
   name: z.string().trim().min(2, 'Nama minimal 2 karakter').max(80),

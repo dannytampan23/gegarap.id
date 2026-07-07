@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { createHash } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 
@@ -140,6 +141,10 @@ const providers = [
   },
 ];
 
+function seedNikHash(nik: string): string {
+  return createHash('sha256').update(`seed:${nik}`).digest('hex');
+}
+
 /** Snapshot financials for a job, mirroring lib/calculations.ts (percent-based). */
 function financials(dailyRate: number, days: number) {
   const subtotal = dailyRate * days;
@@ -214,6 +219,9 @@ async function main() {
             payoutMethod: 'gopay',
             payoutDetails: { phone: p.goPayNumber },
             isVerified: true,
+            identityStatus: 'MANUALLY_VERIFIED',
+            identitySubmittedAt: new Date(),
+            identityVerifiedAt: new Date(),
             kycStatus: 'APPROVED',
             available: true,
             bio: p.bio,
@@ -276,8 +284,11 @@ async function main() {
           payoutMethod: 'gopay',
           payoutDetails: { phone: '081200001111' },
           isVerified: false,
+          nikHash: seedNikHash('3404000000000099'),
+          nikLast4: '0099',
+          identityStatus: 'IDENTITY_SUBMITTED',
+          identitySubmittedAt: new Date(),
           kycStatus: 'PENDING',
-          ktpImageUrl: 'dev/ktp-placeholder',
           bio: 'Menunggu verifikasi admin — contoh data untuk menguji alur KYC.',
         },
       },

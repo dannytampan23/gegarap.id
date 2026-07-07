@@ -1,7 +1,6 @@
 import prisma from '@/lib/prisma';
 import { SearchClient } from '@/components/providers/SearchClient';
-import { PROVIDER_PUBLIC_SELECT } from '@/lib/providers';
-import type { ProviderListItem } from '@/lib/types';
+import { PROVIDER_PUBLIC_SELECT, toPublicProvider } from '@/lib/providers';
 import { JsonLd } from '@/components/seo/JsonLd';
 import { pageMetadata, localBusinessJsonLd } from '@/lib/seo';
 
@@ -20,11 +19,12 @@ export default async function SearchPage({
   searchParams: { category?: string; q?: string };
 }) {
   // Only verified providers, and only public-safe columns reach the client.
-  const providers = (await prisma.providerProfile.findMany({
+  const rows = await prisma.providerProfile.findMany({
     where: { isVerified: true, available: true },
     select: PROVIDER_PUBLIC_SELECT,
     orderBy: { rating: 'desc' },
-  })) as ProviderListItem[];
+  });
+  const providers = rows.map(toPublicProvider);
 
   const totalReviews = providers.reduce((s, p) => s + p.ratingCount, 0);
   const avgRating =

@@ -2,15 +2,16 @@
 
 import * as React from 'react';
 import {
+  IdCard,
+  Inbox,
   Loader2,
+  MapPin,
+  Phone,
+  RefreshCw,
   ShieldCheck,
   ShieldX,
-  RefreshCw,
-  Eye,
-  Phone,
-  MapPin,
+  UserCheck,
   Wallet,
-  Inbox,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -27,7 +28,9 @@ interface PendingRow {
   category: string;
   districts: string[];
   dailyRate: number;
-  hasKtp: boolean;
+  nikMasked: string;
+  identityStatus: string;
+  payoutStatus: string;
   createdAt: string;
 }
 
@@ -46,8 +49,14 @@ interface Detail {
   isVerified: boolean;
   kycStatus: string;
   kycReason: string | null;
-  hasKtp: boolean;
-  ktpUrl: string | null;
+  nikMasked: string;
+  identityStatus: string;
+  identitySubmittedAt: string | null;
+  identityVerifiedAt: string | null;
+  identityRejectedReason: string | null;
+  phoneVerifiedAt: string | null;
+  payoutStatus: string;
+  payoutVerifiedAt: string | null;
   createdAt: string;
 }
 
@@ -92,10 +101,6 @@ export function AdminKycClient() {
     }
   }
 
-  async function refreshKtp() {
-    if (detail) await openDetail(detail.id);
-  }
-
   async function approve() {
     if (!detail) return;
     setAction('approve');
@@ -131,7 +136,7 @@ export function AdminKycClient() {
       });
       const json = await res.json();
       if (res.ok && json.ok) {
-        toast.success('Pendaftaran ditolak', `Alasan dikirim ke ${detail.name}.`);
+        toast.success('Pendaftaran ditolak', `Alasan disimpan untuk ${detail.name}.`);
         setRows((r) => (r ? r.filter((x) => x.id !== detail.id) : r));
         setDetail(null);
       } else {
@@ -144,7 +149,6 @@ export function AdminKycClient() {
     }
   }
 
-  // ── Loading / error / empty states ─────────────────────────────────────────
   if (rows === null && !loadError) {
     return (
       <div className="flex items-center justify-center py-20 text-muted-foreground">
@@ -186,7 +190,7 @@ export function AdminKycClient() {
         <EmptyState
           icon={<Inbox className="h-7 w-7" />}
           title="Tidak ada antrean"
-          description="Semua pendaftaran tukang sudah ditinjau. Kerja bagus! 🎉"
+          description="Semua pendaftaran tukang sudah ditinjau."
         />
       ) : (
         <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-card">
@@ -197,8 +201,8 @@ export function AdminKycClient() {
                   <th className="px-5 py-3.5 font-semibold">Nama</th>
                   <th className="px-5 py-3.5 font-semibold">Kategori</th>
                   <th className="hidden px-5 py-3.5 font-semibold sm:table-cell">Area</th>
-                  <th className="hidden px-5 py-3.5 font-semibold sm:table-cell">Tarif/hari</th>
-                  <th className="px-5 py-3.5 font-semibold">KTP</th>
+                  <th className="hidden px-5 py-3.5 font-semibold sm:table-cell">NIK</th>
+                  <th className="px-5 py-3.5 font-semibold">Status</th>
                   <th className="px-5 py-3.5" />
                 </tr>
               </thead>
@@ -207,27 +211,23 @@ export function AdminKycClient() {
                   <tr key={p.id} className="border-b border-border last:border-0 hover:bg-muted/30">
                     <td className="px-5 py-4">
                       <div className="font-semibold text-foreground">{p.name}</div>
-                      <div className="text-xs text-muted-foreground">{p.phone ?? '—'}</div>
+                      <div className="text-xs text-muted-foreground">{p.phone ?? '-'}</div>
                     </td>
                     <td className="px-5 py-4">
                       <Badge variant="primary">{p.category}</Badge>
                     </td>
                     <td className="hidden px-5 py-4 text-muted-foreground sm:table-cell">
-                      {p.districts.join(', ') || '—'}
+                      {p.districts.join(', ') || '-'}
                     </td>
                     <td className="hidden px-5 py-4 font-medium text-foreground sm:table-cell">
-                      {formatCurrency(p.dailyRate)}
+                      {p.nikMasked}
                     </td>
                     <td className="px-5 py-4">
-                      {p.hasKtp ? (
-                        <Badge variant="success">Ada</Badge>
-                      ) : (
-                        <Badge variant="neutral">Tidak ada</Badge>
-                      )}
+                      <IdentityBadge status={p.identityStatus} />
                     </td>
                     <td className="px-5 py-4 text-right">
                       <Button size="sm" variant="outline" onClick={() => openDetail(p.id)}>
-                        <Eye className="h-4 w-4" />
+                        <UserCheck className="h-4 w-4" />
                         Tinjau
                       </Button>
                     </td>
@@ -239,7 +239,6 @@ export function AdminKycClient() {
         </div>
       )}
 
-      {/* Review modal */}
       <Modal
         open={Boolean(detail) || detailLoading}
         onClose={() => {
@@ -255,35 +254,26 @@ export function AdminKycClient() {
           </div>
         ) : (
           <div className="space-y-5">
-            {/* KTP preview */}
-            <div>
-              <div className="mb-2 flex items-center justify-between">
-                <span className="text-sm font-semibold text-foreground">Dokumen KTP</span>
-                <button
-                  type="button"
-                  onClick={refreshKtp}
-                  className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
-                >
-                  <RefreshCw className="h-3.5 w-3.5" />
-                  Muat ulang (link kedaluwarsa 2 menit)
-                </button>
-              </div>
-              {detail.ktpUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={detail.ktpUrl}
-                  alt="KTP tukang"
-                  className="max-h-72 w-full rounded-xl border border-border bg-muted/30 object-contain"
-                />
-              ) : (
-                <div className="rounded-xl border border-dashed border-border bg-muted/30 px-4 py-8 text-center text-sm text-muted-foreground">
-                  Dokumen KTP tidak tersedia.
+            <div className="rounded-xl border border-primary/20 bg-primary-light/40 p-4">
+              <div className="flex items-start gap-3">
+                <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+                <div>
+                  <p className="text-sm font-semibold text-foreground">Verifikasi tanpa foto KTP</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Admin meninjau data identitas yang diajukan. Sistem tidak menyimpan atau
+                    menampilkan foto KTP.
+                  </p>
                 </div>
-              )}
+              </div>
             </div>
 
-            {/* Identity + payout */}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <InfoRow icon={<IdCard className="h-4 w-4" />} label="NIK" value={detail.nikMasked} />
+              <InfoRow
+                icon={<ShieldCheck className="h-4 w-4" />}
+                label="Status identitas"
+                value={statusLabel(detail.identityStatus)}
+              />
               <InfoRow icon={<Phone className="h-4 w-4" />} label="WhatsApp" value={detail.phone} />
               <InfoRow
                 icon={<MapPin className="h-4 w-4" />}
@@ -295,8 +285,8 @@ export function AdminKycClient() {
                 label="Pencairan"
                 value={
                   detail.payoutMethod
-                    ? `${detail.payoutMethod} · ${detail.goPayNumber ?? '—'}`
-                    : (detail.goPayNumber ?? '—')
+                    ? `${detail.payoutMethod} - ${detail.goPayNumber ?? '-'}`
+                    : (detail.goPayNumber ?? '-')
                 }
               />
               <InfoRow
@@ -312,7 +302,6 @@ export function AdminKycClient() {
               </div>
             )}
 
-            {/* Reject reason */}
             <div>
               <label className="mb-1.5 block text-sm font-semibold text-foreground">
                 Alasan penolakan{' '}
@@ -322,11 +311,10 @@ export function AdminKycClient() {
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
                 rows={2}
-                placeholder="Contoh: Foto KTP buram / data tidak sesuai."
+                placeholder="Contoh: NIK tidak sesuai format atau data perlu diperbaiki."
               />
             </div>
 
-            {/* Actions */}
             <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <Button
                 variant="destructive"
@@ -354,6 +342,37 @@ export function AdminKycClient() {
   );
 }
 
+function statusLabel(status: string): string {
+  switch (status) {
+    case 'PHONE_VERIFIED':
+      return 'Nomor HP terverifikasi';
+    case 'IDENTITY_SUBMITTED':
+      return 'Identitas diajukan';
+    case 'MANUALLY_VERIFIED':
+      return 'Terverifikasi Gegarap';
+    case 'REJECTED':
+      return 'Ditolak';
+    case 'SUSPENDED':
+      return 'Ditangguhkan';
+    default:
+      return 'Belum diverifikasi';
+  }
+}
+
+function IdentityBadge({ status }: { status: string }) {
+  const label = statusLabel(status);
+  const variant =
+    status === 'MANUALLY_VERIFIED'
+      ? 'success'
+      : status === 'REJECTED' || status === 'SUSPENDED'
+        ? 'danger'
+        : status === 'IDENTITY_SUBMITTED' || status === 'PHONE_VERIFIED'
+          ? 'warning'
+          : 'neutral';
+
+  return <Badge variant={variant}>{label}</Badge>;
+}
+
 function InfoRow({
   icon,
   label,
@@ -368,7 +387,7 @@ function InfoRow({
       <span className="mt-0.5 text-muted-foreground">{icon}</span>
       <div className="min-w-0">
         <p className="text-xs text-muted-foreground">{label}</p>
-        <p className="truncate text-sm font-medium text-foreground">{value || '—'}</p>
+        <p className="truncate text-sm font-medium text-foreground">{value || '-'}</p>
       </div>
     </div>
   );

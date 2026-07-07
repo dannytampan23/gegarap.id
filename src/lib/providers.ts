@@ -1,5 +1,6 @@
 import type { Prisma } from '@prisma/client';
 import type { ProviderListItem, ProviderMapItem } from './types';
+import { buildVerificationBadges } from './provider-verification';
 
 /**
  * The ONLY ProviderProfile fields that may ever leave the server for an
@@ -22,6 +23,9 @@ export const PROVIDER_PUBLIC_SELECT = {
   ratingCount: true,
   completedJobs: true,
   available: true,
+  identityStatus: true,
+  phoneVerifiedAt: true,
+  payoutStatus: true,
   user: { select: { name: true } },
 } satisfies Prisma.ProviderProfileSelect;
 
@@ -62,7 +66,14 @@ export function fuzzCoordinate(value: number | null): number | null {
  * object with ONLY these keys — never the raw Prisma row. Pair the whitelist
  * test in __tests__/providers-projection.test.ts to catch accidental additions.
  */
-export function toPublicProvider(p: ProviderListItem): ProviderListItem {
+type PublicProviderSource = Omit<ProviderListItem, 'verificationBadges'> & {
+  identityStatus?: string | null;
+  phoneVerifiedAt?: Date | string | null;
+  payoutStatus?: string | null;
+  verificationBadges?: ProviderListItem['verificationBadges'];
+};
+
+export function toPublicProvider(p: PublicProviderSource): ProviderListItem {
   return {
     id: p.id,
     category: p.category,
@@ -74,6 +85,11 @@ export function toPublicProvider(p: ProviderListItem): ProviderListItem {
     ratingCount: p.ratingCount,
     completedJobs: p.completedJobs,
     available: p.available,
+    verificationBadges: buildVerificationBadges({
+      identityStatus: p.identityStatus,
+      phoneVerifiedAt: p.phoneVerifiedAt,
+      payoutStatus: p.payoutStatus,
+    }),
     user: { name: p.user.name },
   };
 }

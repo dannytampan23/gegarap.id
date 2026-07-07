@@ -3,15 +3,16 @@ import { getSession } from '@/lib/firebase/session';
 import { adminDb } from '@/lib/firebase/admin';
 import { ok, fail, handle } from '@/lib/api';
 import { kycOnboardingSchema } from '@/lib/validations';
+import { hashNik, nikLast4 } from '@/lib/provider-verification';
 
 /**
- * KYC onboarding submission for the 5-step wizard: `POST /api/onboarding`.
+ * Provider identity onboarding submission: `POST /api/onboarding`.
  *
  * Identity (userId) comes from the session, never the body. The profile is
  * upserted by userId so re-submitting after a rejection edits in place and goes
- * back into PENDING review. NIK and document paths are written but NEVER exposed
- * publicly (not in PROVIDER_PUBLIC_SELECT). `category` keeps the primary skill
- * for legacy queries while `categories` holds the full multi-select.
+ * back into PENDING review. Raw NIK is never stored by this route; only a hash
+ * and last 4 digits are saved. `category` keeps the primary skill for legacy
+ * queries while `categories` holds the full multi-select.
  */
 export async function POST(req: Request) {
   return handle(async () => {
@@ -37,12 +38,19 @@ export async function POST(req: Request) {
         categories: input.categories,
         districts: input.districts,
         dailyRate: input.dailyRate,
-        nik: input.nik,
+        nik: null,
+        nikHash: hashNik(input.nik),
+        nikLast4: nikLast4(input.nik),
+        identityStatus: 'IDENTITY_SUBMITTED',
+        identitySubmittedAt: new Date(),
+        identityVerifiedAt: null,
+        identityRejectedReason: null,
+        verifiedByAdminId: null,
         experienceYears: input.experienceYears,
         serviceRadiusKm: input.serviceRadiusKm,
-        ktpImageUrl: input.ktpImageUrl,
-        faceImageUrl: input.faceImageUrl,
-        certificateUrl: input.certificateUrl ?? null,
+        ktpImageUrl: null,
+        faceImageUrl: null,
+        certificateUrl: null,
       };
 
       return tx.providerProfile.upsert({

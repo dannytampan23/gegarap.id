@@ -29,13 +29,20 @@ export function ProviderCard({ provider }: { provider: ProviderListItem }) {
           <h3 className="truncate text-lg font-bold tracking-tight text-foreground">
             {provider.user.name}
           </h3>
-          <span
-            className="mt-0.5 inline-flex items-center gap-1 text-xs font-semibold text-primary"
-            title="Tukang ini telah melewati verifikasi KYC gegarap.id"
-          >
-            <BadgeCheck className="h-3.5 w-3.5" />
-            Terverifikasi
-          </span>
+          {provider.verificationBadges.length > 0 && (
+            <div className="mt-1 flex flex-wrap gap-1.5">
+              {provider.verificationBadges.map((badge) => (
+                <span
+                  key={badge.code}
+                  className="inline-flex items-center gap-1 text-xs font-semibold text-primary"
+                  title="Status verifikasi internal gegarap.id"
+                >
+                  <BadgeCheck className="h-3.5 w-3.5" />
+                  {badge.label}
+                </span>
+              ))}
+            </div>
+          )}
           <div className="mt-1.5">
             <Badge variant="primary">{provider.category}</Badge>
           </div>

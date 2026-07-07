@@ -84,7 +84,7 @@ export function ArticleActions({
                     Butuh bantuan? Panggil Tukang
                   </p>
                   <p className="hidden truncate text-xs text-muted-foreground sm:block">
-                    Tukang terverifikasi KTP, harga transparan.
+                    Tukang terverifikasi Gegarap, harga transparan.
                   </p>
                 </div>
                 <RippleButton

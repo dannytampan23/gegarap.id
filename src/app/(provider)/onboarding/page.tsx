@@ -12,7 +12,7 @@ export const metadata = pageMetadata({
 const perks = [
   { icon: Users, label: 'Akses ribuan pelanggan baru' },
   { icon: TrendingUp, label: 'Atur tarif & jadwal sendiri' },
-  { icon: ShieldCheck, label: 'Pembayaran dijamin aman' },
+  { icon: ShieldCheck, label: 'Tanpa upload foto KTP' },
 ];
 
 export default function OnboardingPage() {
@@ -24,8 +24,8 @@ export default function OnboardingPage() {
             Daftar sebagai Tukang
           </h1>
           <p className="mt-2 text-base text-muted-foreground sm:text-lg">
-            Isi data diri Anda untuk mulai mendapatkan pekerjaan di gegarap.id — gratis, tanpa biaya
-            pendaftaran.
+            Isi data diri dan NIK untuk verifikasi internal. gegarap.id tidak menyimpan foto KTP,
+            gratis tanpa biaya pendaftaran.
           </p>
         </div>
 

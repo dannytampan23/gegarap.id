@@ -128,10 +128,20 @@ model ProviderProfile {
   // ─ KYC onboarding (wizard 5 langkah) ─ semua disimpan server-side saja, tidak
   // pernah masuk PROVIDER_PUBLIC_SELECT. `nik` & dokumen = PII sensitif.
   nik             String? // 16 digit; PII — JANGAN expose ke klien publik
+  nikHash         String?
+  nikLast4        String?
+  identityStatus  String    @default("UNVERIFIED") // UNVERIFIED | PHONE_VERIFIED | IDENTITY_SUBMITTED | MANUALLY_VERIFIED | REJECTED | SUSPENDED
+  identitySubmittedAt DateTime?
+  identityVerifiedAt DateTime?
+  identityRejectedReason String?
+  verifiedByAdminId String?
+  phoneVerifiedAt DateTime?
   experienceYears Int? // lama pengalaman (tahun)
   serviceRadiusKm Int? // radius layanan dari titik provider (km)
   faceImageUrl    String? // PATH foto wajah di private bucket (verifikasi liveness KYC)
   certificateUrl  String? // PATH sertifikat opsional di private bucket
+  payoutStatus    String    @default("UNVERIFIED") // UNVERIFIED | SUBMITTED | VERIFIED | REJECTED
+  payoutVerifiedAt DateTime?
 
   // KYC review state
   kycStatus    String    @default("PENDING") // PENDING | APPROVED | REJECTED
@@ -156,6 +166,8 @@ model ProviderProfile {
   @@index([category])
   @@index([isVerified])
   @@index([kycStatus])
+  @@index([identityStatus])
+  @@index([nikHash])
 }
 
 // ─── JOB (booking) ─────────────────────────────────────────────────────────
