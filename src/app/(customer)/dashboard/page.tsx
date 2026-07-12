@@ -5,6 +5,7 @@ import { getSession } from '@/lib/firebase/session';
 import { CustomerBookings, type CustomerBooking } from '@/components/dashboard/CustomerBookings';
 import { CompleteWhatsAppPrompt } from '@/components/dashboard/CompleteWhatsAppPrompt';
 import { ToolsSection } from '@/components/dashboard/ToolsSection';
+import { MidtransSnapScript } from '@/components/payments/MidtransSnapScript';
 import { isContactUnlocked } from '@/lib/authz';
 
 export const metadata: Metadata = { title: 'Dashboard Saya' };
@@ -71,6 +72,7 @@ export default async function CustomerDashboard() {
       <ToolsSection />
 
       <CustomerBookings bookings={bookings} />
+      <MidtransSnapScript />
     </div>
   );
 }

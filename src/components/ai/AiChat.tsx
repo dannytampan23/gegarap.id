@@ -203,7 +203,7 @@ export function AiChat() {
 
       <div
         ref={scrollRef}
-        className="flex-1 space-y-4 overflow-y-auto bg-[url('/bg-chat-pattern.png')] bg-surface/40 px-4 py-5 sm:px-5"
+        className="flex-1 space-y-4 overflow-y-auto bg-surface/40 px-4 py-5 sm:px-5"
       >
         {!hasChat && (
           <motion.div

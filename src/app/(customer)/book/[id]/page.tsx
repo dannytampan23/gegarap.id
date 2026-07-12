@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import prisma from '@/lib/prisma';
 import { resolveFee } from '@/lib/fee-config';
+import { MidtransSnapScript } from '@/components/payments/MidtransSnapScript';
 import BookingForm from './BookingForm';
 
 export const metadata: Metadata = {
@@ -73,6 +74,7 @@ export default async function BookingPage({ params }: BookingPageProps) {
         }}
         feeRule={feeRule}
       />
+      <MidtransSnapScript />
     </div>
   );
 }

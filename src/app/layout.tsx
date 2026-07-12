@@ -1,18 +1,11 @@
 import type { Metadata, Viewport } from 'next';
 import localFont from 'next/font/local';
-import Script from 'next/script';
 import './globals.css';
 import { Navbar } from '@/components/layout/Navbar';
 import { Footer } from '@/components/layout/Footer';
 import { ToastProvider } from '@/components/ui';
 import { AuthProvider } from '@/components/providers/AuthProvider';
 import { WhatsAppReminderModal } from '@/components/providers/WhatsAppReminderModal';
-
-const MIDTRANS_SNAP_SRC =
-  process.env.MIDTRANS_IS_PRODUCTION === 'true'
-    ? 'https://app.midtrans.com/snap/snap.js'
-    : 'https://app.sandbox.midtrans.com/snap/snap.js';
-const MIDTRANS_CLIENT_KEY = process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY;
 
 const inter = localFont({
   src: './fonts/GeistVF.woff',
@@ -67,9 +60,6 @@ export default function RootLayout({
             <WhatsAppReminderModal />
           </ToastProvider>
         </AuthProvider>
-        {MIDTRANS_CLIENT_KEY && (
-          <Script src={MIDTRANS_SNAP_SRC} data-client-key={MIDTRANS_CLIENT_KEY} strategy="lazyOnload" />
-        )}
       </body>
     </html>
   );
