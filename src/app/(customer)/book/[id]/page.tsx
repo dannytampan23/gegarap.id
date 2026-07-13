@@ -12,12 +12,14 @@ export const metadata: Metadata = {
 };
 
 interface BookingPageProps {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
 export default async function BookingPage({ params }: BookingPageProps) {
+  const { id } = await params;
+
   const provider = await prisma.providerProfile.findUnique({
-    where: { id: params.id },
+    where: { id },
     select: {
       id: true,
       category: true,
