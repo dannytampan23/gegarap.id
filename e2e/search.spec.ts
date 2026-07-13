@@ -17,12 +17,11 @@ test.describe('Search & Filter Tukang', () => {
   });
 
   test('search bar memfilter hasil', async ({ page }) => {
+    await expect(cards(page).first()).toBeVisible({ timeout: 10_000 });
     const before = await cards(page).count();
     await page.getByLabel('Cari tukang').fill('ledeng');
     // results recompute synchronously (client filter) — give React a tick.
-    await expect
-      .poll(async () => cards(page).count())
-      .toBeLessThanOrEqual(before);
+    await expect.poll(async () => cards(page).count()).toBeLessThanOrEqual(before);
   });
 
   test('filter kategori "Tukang Listrik" → hanya tukang listrik', async ({ page }) => {

@@ -52,14 +52,20 @@ export class RateLimitedError extends Error {
   }
 }
 
+export class ServiceUnavailableError extends Error {
+  readonly code = 'SERVICE_UNAVAILABLE';
+  readonly httpStatus = 503;
+  constructor(message = 'Layanan sementara tidak tersedia. Silakan coba lagi.') {
+    super(message);
+    this.name = 'ServiceUnavailableError';
+  }
+}
+
 /** Any error carrying an httpStatus this layer knows how to surface. */
 export interface HttpAwareError extends Error {
   httpStatus: number;
 }
 
 export function isHttpAwareError(err: unknown): err is HttpAwareError {
-  return (
-    err instanceof Error &&
-    typeof (err as { httpStatus?: unknown }).httpStatus === 'number'
-  );
+  return err instanceof Error && typeof (err as { httpStatus?: unknown }).httpStatus === 'number';
 }

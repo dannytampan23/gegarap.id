@@ -5,7 +5,7 @@ import { requireAdmin } from '@/lib/admin-guard';
 import { transitionPayment, InvalidTransitionError, type PaymentStatus } from '@/lib/payment-state';
 import { releaseAndSettle } from '@/lib/payout';
 import { recordAudit, AuditAction } from '@/lib/audit';
-import { refundViaGateway } from '@/lib/midtrans';
+import { executeRefund, RefundAmountLockedError } from '@/lib/refund-execution';
 import { logEvent } from '@/lib/logger';
 
 const resolveSchema = z.object({
@@ -47,41 +47,31 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const job = payment.job;
     const current = payment.status as PaymentStatus;
 
-    /** Move PAID/HELD/REFUND_REQUESTED/DISPUTED → a resolved state. */
-    async function moveTo(to: PaymentStatus, reason: string) {
-      // From an active payment, pass through REFUND_REQUESTED for a clean trail.
-      if (to === 'REFUNDED' && (current === 'PAID' || current === 'HELD')) {
-        await transitionPayment({ paymentId: payment.id, to: 'REFUND_REQUESTED', triggeredBy: adminId, reason });
-      }
-      await transitionPayment({ paymentId: payment.id, to, triggeredBy: adminId, reason });
-    }
-
     try {
       if (input.decision === 'APPROVE') {
         const refundAmount = input.refundAmount ?? rr.amount ?? payment.amount;
-        await moveTo('REFUNDED', `admin approve refund: ${input.reason}`);
-        await prisma.$transaction([
-          prisma.refundRequest.update({
-            where: { id: rr.id },
-            data: {
-              status: 'APPROVED',
-              amount: refundAmount,
-              resolvedById: admin.id,
-              resolvedAt: new Date(),
-              resolutionNote: input.reason,
-            },
-          }),
-          prisma.job.update({ where: { id: job.id }, data: { status: 'CANCELLED' } }),
-        ]);
-
-        // Return the money via the gateway (mock/no-op without real keys).
-        await refundViaGateway({
-          orderId: payment.midtransOrderId,
+        const gateway = await executeRefund({
+          refundRequestId: rr.id,
           paymentId: payment.id,
+          jobId: job.id,
+          orderId: payment.midtransOrderId,
           amount: refundAmount,
           reason: `admin approve: ${input.reason}`,
+          triggeredBy: adminId,
+          resolvedById: adminId,
         });
-        logEvent('refund.resolved', { paymentId: payment.id, by: admin.id, outcome: 'REFUNDED', refundAmount });
+        if (!gateway.success) {
+          return fail(
+            'Gateway belum mengonfirmasi refund. Permintaan tetap menunggu tindak lanjut.',
+            502
+          );
+        }
+        logEvent('refund.resolved', {
+          paymentId: payment.id,
+          by: admin.id,
+          outcome: 'REFUNDED',
+          refundAmount,
+        });
         await recordAudit({
           actorId: admin.id,
           action: AuditAction.RefundTriggered,
@@ -97,18 +87,29 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       if (to === 'RELEASED') {
         // Release escrow + settle the provider payout. Suppress the generic
         // RELEASED notice — we send a tailored dispute-ruling message below.
-        await releaseAndSettle(payment.id, adminId, `admin reject refund (sided with provider): ${input.reason}`);
+        await releaseAndSettle(
+          payment.id,
+          adminId,
+          `admin reject refund (sided with provider): ${input.reason}`
+        );
       } else {
-        await transitionPayment({ paymentId: payment.id, to, triggeredBy: adminId, reason: `admin reject refund: ${input.reason}` });
+        await transitionPayment({
+          paymentId: payment.id,
+          to,
+          triggeredBy: adminId,
+          reason: `admin reject refund: ${input.reason}`,
+        });
       }
       await prisma.$transaction([
         prisma.refundRequest.update({
           where: { id: rr.id },
-          data: { status: 'REJECTED', resolvedById: admin.id, resolvedAt: new Date(), resolutionNote: input.reason },
+          data: {
+            status: 'REJECTED',
+            resolvedById: admin.id,
+            resolvedAt: new Date(),
+            resolutionNote: input.reason,
+          },
         }),
-        ...(to === 'RELEASED'
-          ? [prisma.job.update({ where: { id: job.id }, data: { status: 'COMPLETED' } })]
-          : []),
       ]);
 
       logEvent('refund.resolved', { paymentId: payment.id, by: admin.id, outcome: to });
@@ -121,6 +122,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       });
       return ok({ refundRequestId: rr.id, outcome: to });
     } catch (e) {
+      if (e instanceof RefundAmountLockedError) {
+        return fail('Nominal refund sudah dikunci oleh percobaan gateway sebelumnya.', 409);
+      }
       if (e instanceof InvalidTransitionError) {
         return fail(`Status pembayaran (${current}) tidak bisa diresolusi dengan aksi ini.`, 409);
       }

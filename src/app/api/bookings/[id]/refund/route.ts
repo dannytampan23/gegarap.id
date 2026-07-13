@@ -5,7 +5,7 @@ import { ok, fail, handle } from '@/lib/api';
 import { evaluateRefund, DEFAULT_REFUND_POLICY } from '@/lib/refund-policy';
 import { transitionPayment, InvalidTransitionError } from '@/lib/payment-state';
 import { recordAudit, AuditAction } from '@/lib/audit';
-import { refundViaGateway } from '@/lib/midtrans';
+import { executeRefund } from '@/lib/refund-execution';
 import { logEvent } from '@/lib/logger';
 
 const refundSchema = z.object({
@@ -82,16 +82,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           if (!(e instanceof InvalidTransitionError)) throw e;
         }
       }
-      return ok({ scenario: decision.scenario, outcome: 'CANCELLED', refundAmount: 0, message: decision.reason });
+      return ok({
+        scenario: decision.scenario,
+        outcome: 'CANCELLED',
+        refundAmount: 0,
+        message: decision.reason,
+      });
     }
 
     // Record the request (also feeds the abuse counter) before acting.
-    const status =
-      decision.outcome === 'AUTO_REFUND'
-        ? 'APPROVED'
-        : decision.outcome === 'REJECT'
-          ? 'REJECTED'
-          : 'PENDING_REVIEW';
+    const status = decision.outcome === 'REJECT' ? 'REJECTED' : 'PENDING_REVIEW';
     const refundRequest = await prisma.refundRequest.create({
       data: {
         paymentId: payment.id,
@@ -117,38 +117,40 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }
 
     if (decision.outcome === 'REJECT') {
-      return ok({ scenario: decision.scenario, outcome: 'REJECTED', refundAmount: 0, message: decision.reason });
+      return ok({
+        scenario: decision.scenario,
+        outcome: 'REJECTED',
+        refundAmount: 0,
+        message: decision.reason,
+      });
     }
 
     // Both remaining outcomes require an active (PAID/HELD) payment.
     if (!REFUNDABLE.includes(payment.status)) {
-      await prisma.refundRequest.update({ where: { id: refundRequest.id }, data: { status: 'REJECTED' } });
+      await prisma.refundRequest.update({
+        where: { id: refundRequest.id },
+        data: { status: 'REJECTED' },
+      });
       return fail('Status pembayaran tidak memungkinkan refund.', 409);
     }
 
     try {
       if (decision.outcome === 'AUTO_REFUND') {
-        await transitionPayment({
+        const gateway = await executeRefund({
+          refundRequestId: refundRequest.id,
           paymentId: payment.id,
-          to: 'REFUND_REQUESTED',
-          triggeredBy: session.user.id,
-          reason: input.reason,
-        });
-        await transitionPayment({
-          paymentId: payment.id,
-          to: 'REFUNDED',
-          triggeredBy: 'SYSTEM',
-          reason: `auto-refund ${decision.refundType} ${decision.refundAmount} (${decision.scenario})`,
-        });
-        await prisma.job.update({ where: { id: job.id }, data: { status: 'CANCELLED' } });
-
-        // Return the money via the gateway (mock/no-op without real keys).
-        await refundViaGateway({
+          jobId: job.id,
           orderId: payment.midtransOrderId,
-          paymentId: payment.id,
           amount: decision.refundAmount,
-          reason: `auto-refund ${decision.scenario}`,
+          reason: `auto-refund ${decision.scenario}: ${input.reason}`,
+          triggeredBy: session.user.id,
         });
+        if (!gateway.success) {
+          return fail(
+            'Refund tercatat tetapi gateway belum mengonfirmasi pengembalian dana. Tim kami akan menindaklanjuti.',
+            502
+          );
+        }
         logEvent('refund.resolved', {
           paymentId: payment.id,
           outcome: 'REFUNDED',
@@ -159,9 +161,18 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           action: AuditAction.RefundTriggered,
           targetType: 'Payment',
           targetId: payment.id,
-          metadata: { auto: true, scenario: decision.scenario, refundAmount: decision.refundAmount },
+          metadata: {
+            auto: true,
+            scenario: decision.scenario,
+            refundAmount: decision.refundAmount,
+          },
         });
-        return ok({ scenario: decision.scenario, outcome: 'REFUNDED', refundAmount: decision.refundAmount, message: decision.reason });
+        return ok({
+          scenario: decision.scenario,
+          outcome: 'REFUNDED',
+          refundAmount: decision.refundAmount,
+          message: decision.reason,
+        });
       }
 
       // DISPUTE
@@ -171,10 +182,18 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         triggeredBy: session.user.id,
         reason: input.reason,
       });
-      return ok({ scenario: decision.scenario, outcome: 'DISPUTED', refundAmount: 0, message: decision.reason });
+      return ok({
+        scenario: decision.scenario,
+        outcome: 'DISPUTED',
+        refundAmount: 0,
+        message: decision.reason,
+      });
     } catch (e) {
       if (e instanceof InvalidTransitionError) {
-        await prisma.refundRequest.update({ where: { id: refundRequest.id }, data: { status: 'REJECTED' } });
+        await prisma.refundRequest.update({
+          where: { id: refundRequest.id },
+          data: { status: 'REJECTED' },
+        });
         return fail('Status pembayaran tidak memungkinkan refund saat ini.', 409);
       }
       throw e;

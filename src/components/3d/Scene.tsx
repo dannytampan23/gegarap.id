@@ -11,7 +11,7 @@ import { FloatingBadge } from './FloatingBadge';
 // drei's <PerspectiveCamera makeDefault>. It's the same PerspectiveCamera with
 // fewer moving parts — GSAP gets a stable `camera.position` ref to scrub, and a
 // per-frame lookAt keeps the model centred as z changes.
-function CameraRig({ containerRef }: { containerRef: React.RefObject<HTMLDivElement> }) {
+function CameraRig({ containerRef }: { containerRef: React.RefObject<HTMLDivElement | null> }) {
   const camera = useThree((s) => s.camera);
   const invalidate = useThree((s) => s.invalidate);
 
@@ -63,7 +63,7 @@ export function Scene({
   containerRef,
   active,
 }: {
-  containerRef: React.RefObject<HTMLDivElement>;
+  containerRef: React.RefObject<HTMLDivElement | null>;
   active: boolean;
 }) {
   return (

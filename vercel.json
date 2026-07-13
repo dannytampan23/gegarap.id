@@ -11,6 +11,7 @@
   "crons": [
     { "path": "/api/cron/auto-cancel", "schedule": "0 1 * * *" },
     { "path": "/api/cron/reconcile", "schedule": "0 2 * * *" },
-    { "path": "/api/cron/auto-release", "schedule": "0 3 * * *" }
+    { "path": "/api/cron/auto-release", "schedule": "0 3 * * *" },
+    { "path": "/api/cron/dispatch-outbox", "schedule": "0 4 * * *" }
   ]
 }

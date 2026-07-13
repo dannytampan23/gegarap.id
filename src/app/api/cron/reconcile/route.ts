@@ -1,11 +1,16 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { isAuthorizedCron } from '@/lib/cron-auth';
-import { applyTransition, InvalidTransitionError, ConcurrentTransitionError } from '@/lib/payment-state';
+import {
+  applyTransitionWithJob,
+  InvalidTransitionError,
+  ConcurrentTransitionError,
+} from '@/lib/payment-state';
 import { getTransactionStatus, isMidtransConfigured } from '@/lib/midtrans';
 import { logEvent, logAlert } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
 
 const RECONCILE_OLDER_THAN_MS = 10 * 60 * 1000; // 10 menit (Bagian 5.4)
 
@@ -16,7 +21,7 @@ const RECONCILE_OLDER_THAN_MS = 10 * 60 * 1000; // 10 menit (Bagian 5.4)
  * guarded, so this never fights a webhook that already landed.
  */
 export async function GET(req: Request) {
-  if (!isAuthorizedCron(req)) return NextResponse.json({ ok: false }, { status: 401 });
+  if (!(await isAuthorizedCron(req))) return NextResponse.json({ ok: false }, { status: 401 });
   if (!isMidtransConfigured) {
     return NextResponse.json({ ok: true, skipped: 'midtrans not configured' });
   }
@@ -25,6 +30,8 @@ export async function GET(req: Request) {
   const pending = await prisma.payment.findMany({
     where: { status: 'PENDING', createdAt: { lt: cutoff }, midtransOrderId: { not: null } },
     select: { id: true, jobId: true, midtransOrderId: true, amount: true },
+    orderBy: { createdAt: 'asc' },
+    take: 25,
   });
 
   let healed = 0;
@@ -51,7 +58,7 @@ export async function GET(req: Request) {
 
       if (isSuccess) {
         const res = await prisma.$transaction((tx) =>
-          applyTransition(tx, {
+          applyTransitionWithJob(tx, {
             paymentId: p.id,
             to: 'PAID',
             triggeredBy: 'SYSTEM',
@@ -61,25 +68,25 @@ export async function GET(req: Request) {
               paidAt: new Date(),
               midtransPaymentType: (status.payment_type as string | undefined) ?? null,
             },
+            jobStatus: 'CONFIRMED',
           })
         );
         if (res.changed) {
-          await prisma.job.update({ where: { id: p.jobId }, data: { status: 'CONFIRMED' } });
           healed++;
           logEvent('reconciliation.healed', { paymentId: p.id, to: 'PAID' });
         }
       } else if (isFailure) {
         const res = await prisma.$transaction((tx) =>
-          applyTransition(tx, {
+          applyTransitionWithJob(tx, {
             paymentId: p.id,
             to: 'FAILED',
             triggeredBy: 'SYSTEM',
             reason: `reconcile:${ts}`,
             expectedFrom: 'PENDING',
+            jobStatus: 'CANCELLED',
           })
         );
         if (res.changed) {
-          await prisma.job.update({ where: { id: p.jobId }, data: { status: 'CANCELLED' } });
           healed++;
           logEvent('reconciliation.healed', { paymentId: p.id, to: 'FAILED' });
         }
@@ -96,5 +103,10 @@ export async function GET(req: Request) {
   }
 
   logEvent('reconciliation.run', { scanned: pending.length, healed });
-  return NextResponse.json({ ok: true, scanned: pending.length, healed });
+  return NextResponse.json({
+    ok: true,
+    scanned: pending.length,
+    healed,
+    hasMore: pending.length === 25,
+  });
 }

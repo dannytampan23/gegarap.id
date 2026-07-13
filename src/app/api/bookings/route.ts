@@ -3,6 +3,7 @@ import { ok, fail, handle } from '@/lib/api';
 import { bookingSchema } from '@/lib/validations';
 import { createBooking } from '@/lib/services/booking';
 import { deviceIdFrom } from '@/lib/fraud';
+import { enforceDurableRateLimit } from '@/lib/rate-limit';
 
 export async function POST(req: Request) {
   return handle(async () => {
@@ -12,6 +13,11 @@ export async function POST(req: Request) {
     if (!session?.user?.id) {
       return fail('Harus login untuk booking.', 401);
     }
+
+    await enforceDurableRateLimit(`booking:create:${session.user.id}`, {
+      windowMs: 60 * 60 * 1000,
+      max: 10,
+    });
 
     const body = await req.json().catch(() => null);
     if (!body) return fail('Body permintaan tidak valid.', 400);

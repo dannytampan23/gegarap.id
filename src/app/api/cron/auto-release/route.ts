@@ -5,6 +5,7 @@ import { releaseAndSettle, AUTO_RELEASE_HOURS } from '@/lib/payout';
 import { logEvent } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
 
 /**
  * Auto-release safety net (Bagian 3): when a provider has marked a job done and
@@ -13,7 +14,7 @@ export const dynamic = 'force-dynamic';
  * payments whose job is AWAITING_CONFIRMATION and untouched past the window.
  */
 export async function GET(req: Request) {
-  if (!isAuthorizedCron(req)) return NextResponse.json({ ok: false }, { status: 401 });
+  if (!(await isAuthorizedCron(req))) return NextResponse.json({ ok: false }, { status: 401 });
 
   const cutoff = new Date(Date.now() - AUTO_RELEASE_HOURS * 3_600_000);
   const candidates = await prisma.payment.findMany({
@@ -22,13 +23,18 @@ export async function GET(req: Request) {
       job: { status: 'AWAITING_CONFIRMATION', updatedAt: { lt: cutoff } },
     },
     select: { id: true, jobId: true },
+    orderBy: { updatedAt: 'asc' },
+    take: 25,
   });
 
   let released = 0;
   for (const p of candidates) {
     try {
-      await releaseAndSettle(p.id, 'SYSTEM', `auto-release: customer tidak merespons ${AUTO_RELEASE_HOURS} jam`);
-      await prisma.job.update({ where: { id: p.jobId }, data: { status: 'COMPLETED' } });
+      await releaseAndSettle(
+        p.id,
+        'SYSTEM',
+        `auto-release: customer tidak merespons ${AUTO_RELEASE_HOURS} jam`
+      );
       released++;
     } catch (e) {
       logEvent('autorelease.run', { paymentId: p.id, error: String(e) }, 'warn');
@@ -36,5 +42,10 @@ export async function GET(req: Request) {
   }
 
   logEvent('autorelease.run', { scanned: candidates.length, released });
-  return NextResponse.json({ ok: true, scanned: candidates.length, released });
+  return NextResponse.json({
+    ok: true,
+    scanned: candidates.length,
+    released,
+    hasMore: candidates.length === 25,
+  });
 }

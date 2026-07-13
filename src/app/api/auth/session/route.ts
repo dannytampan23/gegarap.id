@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { adminAuth, AdminUnavailableError, withAdminTimeout } from '@/lib/firebase/admin';
 import { ensureUserRecord, SESSION_COOKIE, SESSION_EXPIRES_IN_MS } from '@/lib/firebase/session';
+import { clientIp, enforceDurableRateLimit } from '@/lib/rate-limit';
+import { isHttpAwareError } from '@/lib/errors';
 
 /**
  * Exchange a Firebase ID token for an httpOnly session cookie (the bridge from
@@ -8,6 +10,18 @@ import { ensureUserRecord, SESSION_COOKIE, SESSION_EXPIRES_IN_MS } from '@/lib/f
  * Postgres mirror + Firestore profile on a first-time sign-in (e.g. Google).
  */
 export async function POST(req: Request) {
+  try {
+    await enforceDurableRateLimit(`auth:session:${clientIp(req)}`, {
+      windowMs: 10 * 60 * 1000,
+      max: 20,
+    });
+  } catch (error) {
+    if (isHttpAwareError(error)) {
+      return NextResponse.json({ error: error.message }, { status: error.httpStatus });
+    }
+    throw error;
+  }
+
   const body = await req.json().catch(() => null);
   const idToken = body?.idToken;
   if (typeof idToken !== 'string' || !idToken) {

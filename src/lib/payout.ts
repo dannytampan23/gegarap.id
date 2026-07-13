@@ -1,9 +1,5 @@
 import prisma from './prisma';
-import {
-  transitionPayment,
-  InvalidTransitionError,
-  type PaymentStatus,
-} from './payment-state';
+import { applyTransition, InvalidTransitionError, type PaymentStatus } from './payment-state';
 import { getDisbursementProvider } from './disbursement';
 import { recordAudit, AuditAction } from './audit';
 import { logEvent, notifyOps } from './logger';
@@ -27,9 +23,7 @@ export function isPayoutEligible(provider: {
   payoutDetails: unknown;
 }): boolean {
   return (
-    provider.kycStatus === 'APPROVED' &&
-    !!provider.payoutMethod &&
-    provider.payoutDetails != null
+    provider.kycStatus === 'APPROVED' && !!provider.payoutMethod && provider.payoutDetails != null
   );
 }
 
@@ -71,14 +65,23 @@ export async function settleProviderPayout(paymentId: string): Promise<SettleRes
   });
   if (!payout) {
     payout = await prisma.payout.create({
-      data: { paymentId, providerProfileId: payment.providerProfileId, amount, status: 'SCHEDULED' },
+      data: {
+        paymentId,
+        providerProfileId: payment.providerProfileId,
+        amount,
+        status: 'SCHEDULED',
+      },
     });
   }
   if (payout.status === 'SUCCESS') return { payoutId: payout.id, status: 'SUCCESS' };
 
   // KYC gate.
   if (!isPayoutEligible(payment.provider)) {
-    logEvent('disbursement.failed', { payoutId: payout.id, paymentId, reason: 'kyc_or_payout_details_missing' }, 'warn');
+    logEvent(
+      'disbursement.failed',
+      { payoutId: payout.id, paymentId, reason: 'kyc_or_payout_details_missing' },
+      'warn'
+    );
     return { payoutId: payout.id, status: 'SCHEDULED', reason: 'kyc_pending' };
   }
 
@@ -104,7 +107,11 @@ export async function settleProviderPayout(paymentId: string): Promise<SettleRes
       where: { id: payout.id },
       data: { status: 'FAILED', failureReason: result.failureReason ?? 'unknown' },
     });
-    logEvent('disbursement.failed', { payoutId: payout.id, paymentId, reason: result.failureReason }, 'error');
+    logEvent(
+      'disbursement.failed',
+      { payoutId: payout.id, paymentId, reason: result.failureReason },
+      'error'
+    );
     // Page ops if this provider's disbursements fail repeatedly (Bagian 10).
     const recentFailures = await prisma.payout.count({
       where: { providerProfileId: payment.providerProfileId, status: 'FAILED' },
@@ -123,11 +130,19 @@ export async function settleProviderPayout(paymentId: string): Promise<SettleRes
   await prisma.$transaction([
     prisma.payout.update({
       where: { id: payout.id },
-      data: { status: 'SUCCESS', disbursementExternalId: result.externalId ?? null, executedAt: new Date() },
+      data: {
+        status: 'SUCCESS',
+        disbursementExternalId: result.externalId ?? null,
+        executedAt: new Date(),
+      },
     }),
     prisma.payment.update({
       where: { id: paymentId },
-      data: { disbursedAt: new Date(), disbursedAmount: amount, platformFeeCharged: payment.platformFee },
+      data: {
+        disbursedAt: new Date(),
+        disbursedAmount: amount,
+        platformFeeCharged: payment.platformFee,
+      },
     }),
   ]);
   logEvent('disbursement.executed', { payoutId: payout.id, paymentId, amount });
@@ -151,19 +166,22 @@ export async function releaseAndSettle(
   triggeredBy: string,
   reason: string
 ): Promise<SettleResult> {
-  const payment = await prisma.payment.findUnique({ where: { id: paymentId } });
-  if (!payment) throw new Error(`Payment not found: ${paymentId}`);
-  const status = payment.status as PaymentStatus;
+  await prisma.$transaction(async (tx) => {
+    const payment = await tx.payment.findUnique({ where: { id: paymentId } });
+    if (!payment) throw new Error(`Payment not found: ${paymentId}`);
+    const status = payment.status as PaymentStatus;
 
-  if (status === 'PAID') {
-    // Intermediate HELD here is a same-call internal step (no separate notify).
-    await transitionPayment({ paymentId, to: 'HELD', triggeredBy, reason });
-    await transitionPayment({ paymentId, to: 'RELEASED', triggeredBy, reason });
-  } else if (status === 'HELD' || status === 'DISPUTED' || status === 'REFUND_REJECTED') {
-    await transitionPayment({ paymentId, to: 'RELEASED', triggeredBy, reason });
-  } else if (status !== 'RELEASED') {
-    throw new InvalidTransitionError(status, 'RELEASED');
-  }
+    if (status === 'PAID') {
+      await applyTransition(tx, { paymentId, to: 'HELD', triggeredBy, reason });
+      await applyTransition(tx, { paymentId, to: 'RELEASED', triggeredBy, reason });
+    } else if (status === 'HELD' || status === 'DISPUTED' || status === 'REFUND_REJECTED') {
+      await applyTransition(tx, { paymentId, to: 'RELEASED', triggeredBy, reason });
+    } else if (status !== 'RELEASED') {
+      throw new InvalidTransitionError(status, 'RELEASED');
+    }
+
+    await tx.job.update({ where: { id: payment.jobId }, data: { status: 'COMPLETED' } });
+  });
 
   logEvent('payment.status_changed', { paymentId, to: 'RELEASED', triggeredBy });
   const settle = await settleProviderPayout(paymentId);

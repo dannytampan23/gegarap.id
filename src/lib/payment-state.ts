@@ -128,6 +128,10 @@ export interface TransitionResult {
   changed: boolean;
 }
 
+export interface TransitionWithJobInput extends TransitionInput {
+  jobStatus: string;
+}
+
 /**
  * Apply a transition inside an existing transaction. Uses a status-guarded
  * `updateMany` so two concurrent callers can't both move the same payment.
@@ -180,9 +184,33 @@ export async function applyTransition(db: Db, input: TransitionInput): Promise<T
   return { payment, event, changed: true };
 }
 
+/**
+ * Move the payment and its owning job as one database transaction. Callers use
+ * this whenever a payment state implies a booking state, preventing half-applied
+ * states when a serverless invocation stops between two writes.
+ */
+export async function applyTransitionWithJob(
+  db: Db,
+  input: TransitionWithJobInput
+): Promise<TransitionResult> {
+  const { jobStatus, ...transition } = input;
+  const result = await applyTransition(db, transition);
+  if (result.changed) {
+    await db.job.update({
+      where: { id: result.payment.jobId },
+      data: { status: jobStatus },
+    });
+  }
+  return result;
+}
+
 /** Run a transition in its own transaction (the common case). */
 export function transitionPayment(input: TransitionInput): Promise<TransitionResult> {
   return prisma.$transaction((tx) => applyTransition(tx, input));
+}
+
+export function transitionPaymentWithJob(input: TransitionWithJobInput): Promise<TransitionResult> {
+  return prisma.$transaction((tx) => applyTransitionWithJob(tx, input));
 }
 
 // ─── Status → human label mapping (Bagian 9) ────────────────────────────────

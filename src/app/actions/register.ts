@@ -1,17 +1,19 @@
 'use server';
 
-import { FieldValue } from 'firebase-admin/firestore';
 import { Prisma } from '@prisma/client';
-import { adminAuth, adminDb, AdminUnavailableError, withAdminTimeout } from '@/lib/firebase/admin';
+import { adminAuth, AdminUnavailableError, withAdminTimeout } from '@/lib/firebase/admin';
 import prisma from '@/lib/prisma';
 import { registerSchema } from '@/lib/validations/auth';
+import { enqueueIdentitySync } from '@/lib/identity-sync';
 
 export type RegisterResult =
   | { ok: true }
   | { ok: false; error: string; fieldErrors?: Record<string, string> };
 
 function firebaseErrorCode(e: unknown): string | undefined {
-  return typeof e === 'object' && e && 'code' in e ? String((e as { code: unknown }).code) : undefined;
+  return typeof e === 'object' && e && 'code' in e
+    ? String((e as { code: unknown }).code)
+    : undefined;
 }
 
 /**
@@ -41,10 +43,8 @@ export async function registerUser(raw: unknown): Promise<RegisterResult> {
 
   try {
     // Soft WA dup-check (the hard guarantee is the Postgres unique index below).
-    const dup = await withAdminTimeout(
-      adminDb.collection('users').where('whatsapp', '==', whatsapp).limit(1).get()
-    );
-    if (!dup.empty) {
+    const dup = await prisma.user.findUnique({ where: { phone: whatsapp }, select: { id: true } });
+    if (dup) {
       return {
         ok: false,
         error: 'Nomor WhatsApp sudah terdaftar. Silakan masuk.',
@@ -72,7 +72,10 @@ export async function registerUser(raw: unknown): Promise<RegisterResult> {
 
     // 2. Postgres mirror (id = Firebase uid). `phone @unique` is the WA backstop.
     try {
-      await prisma.user.create({ data: { id: uid, name, email, phone: whatsapp } });
+      await prisma.$transaction(async (tx) => {
+        await tx.user.create({ data: { id: uid, name, email, phone: whatsapp } });
+        await enqueueIdentitySync(tx, { userId: uid, authProvider: 'password' });
+      });
     } catch (e) {
       // Don't orphan a Firebase account if the mirror insert fails.
       await adminAuth.deleteUser(uid).catch(() => {});
@@ -91,19 +94,6 @@ export async function registerUser(raw: unknown): Promise<RegisterResult> {
       }
       throw e;
     }
-
-    // 3. Firestore auth-profile document.
-    await withAdminTimeout(
-      adminDb.collection('users').doc(uid).set({
-        name,
-        email,
-        whatsapp,
-        photoURL: null,
-        role: 'CUSTOMER',
-        authProvider: 'password',
-        createdAt: FieldValue.serverTimestamp(),
-      })
-    );
 
     return { ok: true };
   } catch (e) {

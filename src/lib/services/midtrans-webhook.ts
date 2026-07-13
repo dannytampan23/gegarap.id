@@ -20,7 +20,7 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import prisma from '../prisma';
 import {
-  applyTransition,
+  applyTransitionWithJob,
   InvalidTransitionError,
   ConcurrentTransitionError,
 } from '../payment-state';
@@ -154,7 +154,7 @@ export async function handleMidtransWebhook(body: MidtransNotification): Promise
   try {
     if (isSuccess) {
       const res = await prisma.$transaction((tx) =>
-        applyTransition(tx, {
+        applyTransitionWithJob(tx, {
           paymentId: payment.id,
           to: 'PAID',
           triggeredBy: 'WEBHOOK',
@@ -166,27 +166,32 @@ export async function handleMidtransWebhook(body: MidtransNotification): Promise
             midtransVaNumber: va_numbers?.[0]?.va_number ?? null,
             paidAt: new Date(),
           },
+          jobStatus: 'CONFIRMED',
         })
       );
       if (res.changed) {
-        await prisma.job.update({ where: { id: payment.jobId }, data: { status: 'CONFIRMED' } });
         logEvent('payment.status_changed', { paymentId: payment.id, from: 'PENDING', to: 'PAID' });
         // Email the customer their receipt + PDF nota (best-effort, off the critical path).
         await sendReceiptEmail(payment.jobId).catch(() => {});
       }
     } else if (isFailure) {
       const res = await prisma.$transaction((tx) =>
-        applyTransition(tx, {
+        applyTransitionWithJob(tx, {
           paymentId: payment.id,
           to: 'FAILED',
           triggeredBy: 'WEBHOOK',
           reason: transaction_status,
           rawWebhookPayload: rawPayload,
           expectedFrom: 'PENDING',
+          jobStatus: 'CANCELLED',
         })
       );
       if (res.changed) {
-        logEvent('payment.status_changed', { paymentId: payment.id, from: 'PENDING', to: 'FAILED' });
+        logEvent('payment.status_changed', {
+          paymentId: payment.id,
+          from: 'PENDING',
+          to: 'FAILED',
+        });
       }
     }
   } catch (err) {

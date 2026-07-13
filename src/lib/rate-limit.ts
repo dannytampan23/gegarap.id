@@ -14,6 +14,10 @@
  * `rateLimit` is async (the Redis backend does network I/O). Callers must await.
  */
 
+import { Prisma } from '@prisma/client';
+import prisma from '@/lib/prisma';
+import { RateLimitedError, ServiceUnavailableError } from '@/lib/errors';
+
 interface Bucket {
   count: number;
   resetAt: number;
@@ -157,7 +161,10 @@ async function rateLimitUpstash(
     if (typeof count !== 'number') return null;
 
     if (count > opts.max) {
-      const retryAfter = typeof pttl === 'number' && pttl > 0 ? Math.ceil(pttl / 1000) : Math.ceil(opts.windowMs / 1000);
+      const retryAfter =
+        typeof pttl === 'number' && pttl > 0
+          ? Math.ceil(pttl / 1000)
+          : Math.ceil(opts.windowMs / 1000);
       return { ok: false, remaining: 0, retryAfter };
     }
     return { ok: true, remaining: Math.max(0, opts.max - count), retryAfter: 0 };
@@ -181,4 +188,74 @@ export async function rateLimit(
     // Upstash unreachable → degrade to the in-memory limiter rather than 500.
   }
   return rateLimitMemory(key, opts);
+}
+
+/**
+ * Authoritative limiter for authenticated mutations. PostgreSQL is already a
+ * required dependency, so this remains global even when optional Redis is not
+ * configured. Serializable retries close the lost-update window under load.
+ */
+export async function durableRateLimit(
+  key: string,
+  opts: RateLimitOptions = { windowMs: 60_000, max: 20 }
+): Promise<RateLimitResult> {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      return await prisma.$transaction(
+        async (tx) => {
+          const now = new Date();
+          const existing = await tx.rateLimitBucket.findUnique({ where: { key } });
+
+          if (!existing || existing.resetAt <= now) {
+            const resetAt = new Date(now.getTime() + opts.windowMs);
+            await tx.rateLimitBucket.upsert({
+              where: { key },
+              create: { key, count: 1, resetAt },
+              update: { count: 1, resetAt },
+            });
+            return { ok: true, remaining: Math.max(0, opts.max - 1), retryAfter: 0 };
+          }
+
+          const retryAfter = Math.max(
+            1,
+            Math.ceil((existing.resetAt.getTime() - now.getTime()) / 1000)
+          );
+          if (existing.count >= opts.max) {
+            return { ok: false, remaining: 0, retryAfter };
+          }
+
+          const updated = await tx.rateLimitBucket.update({
+            where: { key },
+            data: { count: { increment: 1 } },
+          });
+          return {
+            ok: true,
+            remaining: Math.max(0, opts.max - updated.count),
+            retryAfter: 0,
+          };
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
+      );
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2034' &&
+        attempt < 2
+      ) {
+        continue;
+      }
+      throw new ServiceUnavailableError('Proteksi keamanan sementara tidak tersedia. Coba lagi.');
+    }
+  }
+
+  throw new ServiceUnavailableError('Proteksi keamanan sementara tidak tersedia. Coba lagi.');
+}
+
+export async function enforceDurableRateLimit(key: string, opts?: RateLimitOptions): Promise<void> {
+  const result = await durableRateLimit(key, opts);
+  if (!result.ok) {
+    throw new RateLimitedError(
+      `Terlalu banyak permintaan. Coba lagi dalam ${result.retryAfter} detik.`
+    );
+  }
 }

@@ -103,6 +103,7 @@ model OutboxMessage {
   lastError String?
   dedupeKey String?   @unique // optional idempotency guard for retried transitions
   createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
   sentAt    DateTime?
 
   @@index([status, createdAt])
@@ -127,26 +128,26 @@ model ProviderProfile {
 
   // ─ KYC onboarding (wizard 5 langkah) ─ semua disimpan server-side saja, tidak
   // pernah masuk PROVIDER_PUBLIC_SELECT. `nik` & dokumen = PII sensitif.
-  nik             String? // 16 digit; PII — JANGAN expose ke klien publik
-  nikHash         String?
-  nikLast4        String?
-  identityStatus  String    @default("UNVERIFIED") // UNVERIFIED | PHONE_VERIFIED | IDENTITY_SUBMITTED | MANUALLY_VERIFIED | REJECTED | SUSPENDED
-  identitySubmittedAt DateTime?
-  identityVerifiedAt DateTime?
+  nik                    String? // 16 digit; PII — JANGAN expose ke klien publik
+  nikHash                String?
+  nikLast4               String?
+  identityStatus         String    @default("UNVERIFIED") // UNVERIFIED | PHONE_VERIFIED | IDENTITY_SUBMITTED | MANUALLY_VERIFIED | REJECTED | SUSPENDED
+  identitySubmittedAt    DateTime?
+  identityVerifiedAt     DateTime?
   identityRejectedReason String?
-  verifiedByAdminId String?
-  phoneVerifiedAt DateTime?
-  experienceYears Int? // lama pengalaman (tahun)
-  serviceRadiusKm Int? // radius layanan dari titik provider (km)
-  faceImageUrl    String? // PATH foto wajah di private bucket (verifikasi liveness KYC)
-  certificateUrl  String? // PATH sertifikat opsional di private bucket
-  payoutStatus    String    @default("UNVERIFIED") // UNVERIFIED | SUBMITTED | VERIFIED | REJECTED
-  payoutVerifiedAt DateTime?
+  verifiedByAdminId      String?
+  phoneVerifiedAt        DateTime?
+  experienceYears        Int? // lama pengalaman (tahun)
+  serviceRadiusKm        Int? // radius layanan dari titik provider (km)
+  faceImageUrl           String? // PATH foto wajah di private bucket (verifikasi liveness KYC)
+  certificateUrl         String? // PATH sertifikat opsional di private bucket
+  payoutStatus           String    @default("UNVERIFIED") // UNVERIFIED | SUBMITTED | VERIFIED | REJECTED
+  payoutVerifiedAt       DateTime?
 
   // KYC review state
-  kycStatus    String    @default("PENDING") // PENDING | APPROVED | REJECTED
-  kycReason    String? // alasan penolakan (jika REJECTED)
-  kycReviewedAt DateTime?
+  kycStatus       String    @default("PENDING") // PENDING | APPROVED | REJECTED
+  kycReason       String? // alasan penolakan (jika REJECTED)
+  kycReviewedAt   DateTime?
   kycReviewedById String? // User.id admin yang meninjau
 
   rating        Float    @default(0)
@@ -170,13 +171,25 @@ model ProviderProfile {
   @@index([nikHash])
 }
 
+// Durable fixed-window counters for security-sensitive operations. Public read
+// endpoints may use Redis/in-memory limits, but mutations use this PostgreSQL
+// backstop so limits remain authoritative across Vercel instances.
+model RateLimitBucket {
+  key       String   @id
+  count     Int      @default(0)
+  resetAt   DateTime
+  updatedAt DateTime @updatedAt
+
+  @@index([resetAt])
+}
+
 // ─── JOB (booking) ─────────────────────────────────────────────────────────
 // The booking entity. Financials are snapshotted at creation time.
 model Job {
-  id                String   @id @default(uuid())
+  id                String    @id @default(uuid())
   customerId        String
   providerProfileId String
-  status            String   @default("PENDING") // PENDING|CONFIRMED|IN_PROGRESS|COMPLETED|CANCELLED
+  status            String    @default("PENDING") // PENDING|CONFIRMED|IN_PROGRESS|COMPLETED|CANCELLED
   description       String?
   estimatedDays     Int
   customerAddress   String
@@ -185,7 +198,7 @@ model Job {
   scheduledDate     DateTime?
   timeSlot          String? // "pagi" | "siang" | "sore"
   notes             String?
-  isConsentGiven    Boolean  @default(true)
+  isConsentGiven    Boolean   @default(true)
 
   // Finansial — semua dalam Rupiah utuh (integer minor-unit, tanpa desimal)
   dailyRate          Int @default(0) // snapshot tarif saat booking
@@ -235,10 +248,10 @@ model Payment {
   campaignId  String?
 
   // Gateway
-  paymentGateway      String  @default("MIDTRANS") // MIDTRANS | XENDIT
-  idempotencyKey      String? @unique // unik per percobaan pembayaran
-  midtransTrxId       String? @unique
-  midtransOrderId     String? @unique // externalId — format: GGR-{jobId}-{timestamp}
+  paymentGateway      String    @default("MIDTRANS") // MIDTRANS | XENDIT
+  idempotencyKey      String?   @unique // unik per percobaan pembayaran
+  midtransTrxId       String?   @unique
+  midtransOrderId     String?   @unique // externalId — format: GGR-{jobId}-{timestamp}
   midtransToken       String? // Snap token
   midtransPaymentType String? // gopay, bank_transfer, dll
   midtransVaNumber    String? // virtual account number jika ada
@@ -253,8 +266,8 @@ model Payment {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  job            Job             @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  customer       User?           @relation("CustomerPayments", fields: [customerId], references: [id])
+  job            Job              @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  customer       User?            @relation("CustomerPayments", fields: [customerId], references: [id])
   provider       ProviderProfile? @relation("ProviderPayments", fields: [providerProfileId], references: [id])
   events         PaymentEvent[]
   refundRequests RefundRequest[]
@@ -285,40 +298,45 @@ model PaymentEvent {
 
 // ─── REFUND REQUEST ────────────────────────────────────────────────────────
 model RefundRequest {
-  id             String   @id @default(uuid())
-  paymentId      String
-  requestedById  String // User.id (customer/admin)
-  reason         String
-  evidenceUrls   String[] @default([])
-  type           String // FULL | PARTIAL
-  amount         Int? // wajib untuk PARTIAL
-  status         String   @default("PENDING_REVIEW") // PENDING_REVIEW | APPROVED | REJECTED
-  resolvedById   String?
-  resolvedAt     DateTime?
-  resolutionNote String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id                   String    @id @default(uuid())
+  paymentId            String
+  requestedById        String // User.id (customer/admin)
+  reason               String
+  evidenceUrls         String[]  @default([])
+  type                 String // FULL | PARTIAL
+  amount               Int? // wajib untuk PARTIAL
+  status               String    @default("PENDING_REVIEW") // PENDING_REVIEW | APPROVED | REJECTED
+  resolvedById         String?
+  resolvedAt           DateTime?
+  resolutionNote       String?
+  gatewayStatus        String? // PROCESSING | SUCCESS | FAILED
+  gatewayRefundId      String?
+  gatewayFailureReason String?
+  gatewayAttemptedAt   DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
   payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
 
   @@index([paymentId])
   @@index([status])
+  @@index([gatewayStatus])
 }
 
 // ─── PAYOUT ────────────────────────────────────────────────────────────────
 // One disbursement attempt to a provider. Mockable via IDisbursementProvider.
 model Payout {
-  id                     String   @id @default(uuid())
+  id                     String    @id @default(uuid())
   providerProfileId      String
   paymentId              String
   amount                 Int
-  status                 String   @default("SCHEDULED") // SCHEDULED | PROCESSING | SUCCESS | FAILED
+  status                 String    @default("SCHEDULED") // SCHEDULED | PROCESSING | SUCCESS | FAILED
   disbursementExternalId String?
   failureReason          String?
-  scheduledAt            DateTime @default(now())
+  scheduledAt            DateTime  @default(now())
   executedAt             DateTime?
-  createdAt              DateTime @default(now())
-  updatedAt              DateTime @updatedAt
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
 
   payment  Payment         @relation(fields: [paymentId], references: [id], onDelete: Cascade)
   provider ProviderProfile @relation(fields: [providerProfileId], references: [id])

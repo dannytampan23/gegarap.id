@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { getSession } from '@/lib/firebase/session';
 import { uploadPrivateDocument, type PrivateDocKind } from '@/lib/storage';
+import { clientIp, enforceDurableRateLimit } from '@/lib/rate-limit';
+import { matchesDeclaredFileType } from '@/lib/file-signature';
+import { isHttpAwareError } from '@/lib/errors';
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf'];
 const MAX_BYTES = 5 * 1024 * 1024;
@@ -10,6 +13,18 @@ export async function POST(req: Request) {
   const session = await getSession();
   if (!session?.user?.id) {
     return NextResponse.json({ ok: false, message: 'Harus login dulu.' }, { status: 401 });
+  }
+
+  try {
+    await enforceDurableRateLimit(`upload:${session.user.id}:${clientIp(req)}`, {
+      windowMs: 60 * 60 * 1000,
+      max: 10,
+    });
+  } catch (error) {
+    if (isHttpAwareError(error)) {
+      return NextResponse.json({ ok: false, message: error.message }, { status: error.httpStatus });
+    }
+    throw error;
   }
 
   const formData = await req.formData();
@@ -34,7 +49,9 @@ export async function POST(req: Request) {
       {
         ok: false,
         message:
-          kind === 'certificate' ? 'Hanya JPG/PNG/PDF yang diizinkan.' : 'Hanya JPG/PNG yang diizinkan.',
+          kind === 'certificate'
+            ? 'Hanya JPG/PNG/PDF yang diizinkan.'
+            : 'Hanya JPG/PNG yang diizinkan.',
       },
       { status: 400 }
     );
@@ -46,6 +63,12 @@ export async function POST(req: Request) {
 
   try {
     const buffer = Buffer.from(await file.arrayBuffer());
+    if (!matchesDeclaredFileType(buffer, file.type)) {
+      return NextResponse.json(
+        { ok: false, message: 'Isi file tidak sesuai dengan format yang dinyatakan.' },
+        { status: 400 }
+      );
+    }
     const ext = file.type === 'application/pdf' ? 'pdf' : file.type === 'image/png' ? 'png' : 'jpg';
     const { path } = await uploadPrivateDocument({
       userId: session.user.id,

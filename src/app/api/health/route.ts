@@ -11,7 +11,16 @@ export async function GET() {
   try {
     await prisma.$queryRaw`SELECT 1`;
 
-    return healthResponse('ok', 200, startedAt);
+    return healthResponse('ok', 200, startedAt, {
+      database: 'ok',
+      cronAuth: process.env.CRON_SECRET ? 'configured' : 'missing',
+      payout:
+        process.env.DISBURSEMENT_PROVIDER === 'gateway'
+          ? 'gateway'
+          : process.env.DISBURSEMENT_PROVIDER === 'disabled'
+            ? 'disabled'
+            : 'unsafe-default-blocked',
+    });
   } catch (error) {
     console.error('[api/health] database check failed:', error);
 

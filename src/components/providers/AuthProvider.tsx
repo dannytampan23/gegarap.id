@@ -18,11 +18,11 @@ type Status = 'loading' | 'authenticated' | 'unauthenticated';
 interface SessionShape {
   data: { user: SessionUser } | null;
   status: Status;
-  /** Re-read the Firestore profile (e.g. after the user adds their WA number). */
+  /** Re-read the authoritative Postgres profile. */
   update: () => Promise<void>;
 }
 
-/** Identity as returned by /api/me — sourced from Postgres (authoritative). */
+/** Identity returned by /api/auth/me and sourced from Postgres. */
 interface MeProfile {
   name?: string | null;
   phone?: string | null;
@@ -39,8 +39,8 @@ const SessionContext = React.createContext<SessionShape>({
 /**
  * Client auth context backed by Firebase Auth. Exposes a `useSession()` hook
  * shaped like the old NextAuth one so existing components only swap the import.
- * `role`/`phone`/`name` come from /api/me — i.e. Postgres, the single source of
- * truth — so the client never shows a stale Firestore copy of the role. They
+ * `role`/`phone`/`name` come from /api/auth/me, backed by Postgres as the single
+ * source of truth, so the client never shows a stale Firestore role. They
  * drive UI only; the server independently re-checks for RBAC.
  *
  * Mounted once in the root layout (replaces NextAuth's SessionProvider).
@@ -56,7 +56,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     try {
-      const res = await fetch('/api/me', { cache: 'no-store' });
+      const res = await fetch('/api/auth/me', { cache: 'no-store' });
       if (!res.ok) {
         setProfile(null);
         return;

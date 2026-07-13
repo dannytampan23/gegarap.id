@@ -1,6 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   MockDisbursementProvider,
+  DisabledDisbursementProvider,
   GatewayDisbursementProvider,
   getDisbursementProvider,
 } from '@/lib/disbursement';
@@ -29,6 +30,15 @@ describe('getDisbursementProvider (Bagian 6)', () => {
   });
 });
 
+describe('production disbursement safety', () => {
+  it('uses DISABLED rather than a fake payout when production is unconfigured', () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    delete process.env.DISBURSEMENT_PROVIDER;
+    expect(getDisbursementProvider()).toBeInstanceOf(DisabledDisbursementProvider);
+    vi.unstubAllEnvs();
+  });
+});
+
 describe('GatewayDisbursementProvider (Iris)', () => {
   const prev = process.env.MIDTRANS_IRIS_API_KEY;
   afterEach(() => {
@@ -39,7 +49,10 @@ describe('GatewayDisbursementProvider (Iris)', () => {
     delete process.env.MIDTRANS_IRIS_API_KEY;
     const res = await new GatewayDisbursementProvider().disburse({
       ...baseReq,
-      recipient: { method: 'bank', details: { accountNumber: '123', bankCode: 'bca', accountName: 'Joko' } },
+      recipient: {
+        method: 'bank',
+        details: { accountNumber: '123', bankCode: 'bca', accountName: 'Joko' },
+      },
     });
     expect(res.success).toBe(false);
     expect(res.failureReason).toMatch(/Iris API key/i);
@@ -71,7 +84,12 @@ describe('refundViaGateway (Bagian 7)', () => {
   });
 
   it('tanpa order id → skipped (no-op sukses)', async () => {
-    const res = await refundViaGateway({ orderId: null, paymentId: 'pay1', amount: 30_000, reason: 'test' });
+    const res = await refundViaGateway({
+      orderId: null,
+      paymentId: 'pay1',
+      amount: 30_000,
+      reason: 'test',
+    });
     expect(res.success).toBe(true);
     expect(res.skipped).toBe(true);
   });

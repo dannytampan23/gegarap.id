@@ -66,7 +66,11 @@ export function logEvent(
 
   // Forward only the actionable levels to Sentry, tagged for tracing (Bagian 10).
   if (level !== 'info') {
-    captureMessage(`${event}`, { level: LEVEL_TO_SENTRY[level], tags: traceTags(data), extra: data });
+    captureMessage(`${event}`, {
+      level: LEVEL_TO_SENTRY[level],
+      tags: traceTags(data),
+      extra: data,
+    });
   }
 }
 
@@ -85,9 +89,39 @@ export function logAlert(alert: string, data: Record<string, unknown> = {}): voi
  * match it. Best-effort and never throws — alerting must not break the path that
  * raised it. Always pair with `logAlert` for the record.
  *
- * (Previously also paged an ops WhatsApp number; programmatic WhatsApp was
- * removed, so this is now log/Sentry-only.)
+ * An optional authenticated webhook provides an external paging sink without
+ * coupling financial paths to a specific chat provider.
  */
 export async function notifyOps(alert: string, data: Record<string, unknown> = {}): Promise<void> {
   logEvent('ops.alerted', { alert, ...data }, 'error');
+  const url = process.env.OPS_ALERT_WEBHOOK_URL;
+  if (!url) return;
+  try {
+    await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(process.env.OPS_ALERT_WEBHOOK_TOKEN
+          ? { Authorization: `Bearer ${process.env.OPS_ALERT_WEBHOOK_TOKEN}` }
+          : {}),
+      },
+      body: JSON.stringify({
+        service: 'gegarap-id',
+        alert,
+        data,
+        timestamp: new Date().toISOString(),
+      }),
+      signal: AbortSignal.timeout(2_000),
+    });
+  } catch (error) {
+    console.error(
+      JSON.stringify({
+        ts: new Date().toISOString(),
+        level: 'error',
+        event: 'ops.delivery_failed',
+        alert,
+        error: String(error),
+      })
+    );
+  }
 }

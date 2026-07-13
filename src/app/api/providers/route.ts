@@ -1,12 +1,12 @@
 import prisma from '@/lib/prisma';
 import { getSession } from '@/lib/firebase/session';
-import { adminDb } from '@/lib/firebase/admin';
 import { ok, fail, handle } from '@/lib/api';
 import { onboardingSchema } from '@/lib/validations';
 import { PROVIDER_PUBLIC_SELECT, toPublicProvider } from '@/lib/providers';
 import { rateLimit, clientIp, recordRateLimitBreach } from '@/lib/rate-limit';
 import { logAlert, notifyOps } from '@/lib/logger';
 import { hashNik, nikLast4 } from '@/lib/provider-verification';
+import { enqueueIdentitySync } from '@/lib/identity-sync';
 
 export async function GET(req: Request) {
   return handle(async () => {
@@ -58,7 +58,7 @@ export async function POST(req: Request) {
         data: { name: input.name, role: 'PROVIDER' },
       });
 
-      return tx.providerProfile.upsert({
+      const profile = await tx.providerProfile.upsert({
         where: { userId: session.user.id },
         update: {
           category: input.category,
@@ -100,14 +100,9 @@ export async function POST(req: Request) {
           kycStatus: 'PENDING',
         },
       });
+      await enqueueIdentitySync(tx, { userId: session.user.id });
+      return profile;
     });
-
-    // Mirror the role (and name) to the Firestore auth profile so the client
-    // UI reflects PROVIDER immediately. Postgres stays authoritative for RBAC.
-    await adminDb
-      .collection('users')
-      .doc(session.user.id)
-      .set({ role: 'PROVIDER', name: input.name }, { merge: true });
 
     return ok({ providerProfileId: profile.id, name: input.name }, 201);
   })();

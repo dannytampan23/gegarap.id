@@ -2,10 +2,10 @@ import { z } from 'zod';
 import prisma from '@/lib/prisma';
 import { ok, fail, handle } from '@/lib/api';
 import { requireAdmin } from '@/lib/admin-guard';
-import { transitionPayment, InvalidTransitionError, type PaymentStatus } from '@/lib/payment-state';
+import { InvalidTransitionError, type PaymentStatus } from '@/lib/payment-state';
 import { releaseAndSettle } from '@/lib/payout';
 import { recordAudit, AuditAction } from '@/lib/audit';
-import { refundViaGateway } from '@/lib/midtrans';
+import { executeRefund, RefundAmountLockedError } from '@/lib/refund-execution';
 import { logEvent } from '@/lib/logger';
 
 const forceSchema = z.object({
@@ -35,7 +35,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     try {
       if (input.action === 'RELEASE') {
         await releaseAndSettle(payment.id, admin.id, `force-release: ${input.reason}`);
-        await prisma.job.update({ where: { id: payment.jobId }, data: { status: 'COMPLETED' } });
         await recordAudit({
           actorId: admin.id,
           action: 'FORCE_RELEASE',
@@ -43,49 +42,75 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           targetId: payment.id,
           metadata: { reason: input.reason, from: current },
         });
-        logEvent('payment.status_changed', { paymentId: payment.id, to: 'RELEASED', by: admin.id, forced: true });
+        logEvent('payment.status_changed', {
+          paymentId: payment.id,
+          to: 'RELEASED',
+          by: admin.id,
+          forced: true,
+        });
         return ok({ paymentId: payment.id, action: 'RELEASE', status: 'RELEASED' });
       }
 
-      // REFUND: step PAID/HELD → REFUND_REQUESTED → REFUNDED; DISPUTED → REFUNDED.
-      if (current === 'PAID' || current === 'HELD') {
-        await transitionPayment({ paymentId: payment.id, to: 'REFUND_REQUESTED', triggeredBy: admin.id, reason: input.reason });
-      }
-      await transitionPayment({ paymentId: payment.id, to: 'REFUNDED', triggeredBy: admin.id, reason: `force-refund: ${input.reason}` });
-      await prisma.$transaction([
-        prisma.job.update({ where: { id: payment.jobId }, data: { status: 'CANCELLED' } }),
-        prisma.refundRequest.create({
+      let refundRequest = await prisma.refundRequest.findFirst({
+        where: { paymentId: payment.id, status: 'PENDING_REVIEW' },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (!refundRequest) {
+        refundRequest = await prisma.refundRequest.create({
           data: {
             paymentId: payment.id,
             requestedById: admin.id,
             reason: `[FORCE] ${input.reason}`,
             type: 'FULL',
             amount: payment.amount,
-            status: 'APPROVED',
-            resolvedById: admin.id,
-            resolvedAt: new Date(),
-            resolutionNote: 'force-refund oleh admin',
+            status: 'PENDING_REVIEW',
           },
-        }),
-      ]);
-      await refundViaGateway({
-        orderId: payment.midtransOrderId,
+        });
+      }
+      const gateway = await executeRefund({
+        refundRequestId: refundRequest.id,
         paymentId: payment.id,
+        jobId: payment.jobId,
+        orderId: payment.midtransOrderId,
         amount: payment.amount,
         reason: `force-refund: ${input.reason}`,
+        triggeredBy: admin.id,
+        resolvedById: admin.id,
       });
+      if (!gateway.success) {
+        return fail(
+          'Gateway belum mengonfirmasi refund. Permintaan tetap menunggu tindak lanjut.',
+          502
+        );
+      }
       await recordAudit({
         actorId: admin.id,
         action: AuditAction.RefundTriggered,
         targetType: 'Payment',
         targetId: payment.id,
-        metadata: { reason: input.reason, from: current, forced: true, refundAmount: payment.amount },
+        metadata: {
+          reason: input.reason,
+          from: current,
+          forced: true,
+          refundAmount: payment.amount,
+        },
       });
-      logEvent('refund.resolved', { paymentId: payment.id, to: 'REFUNDED', by: admin.id, forced: true });
+      logEvent('refund.resolved', {
+        paymentId: payment.id,
+        to: 'REFUNDED',
+        by: admin.id,
+        forced: true,
+      });
       return ok({ paymentId: payment.id, action: 'REFUND', status: 'REFUNDED' });
     } catch (e) {
+      if (e instanceof RefundAmountLockedError) {
+        return fail('Nominal refund sudah dikunci oleh percobaan gateway sebelumnya.', 409);
+      }
       if (e instanceof InvalidTransitionError) {
-        return fail(`Status pembayaran (${current}) tidak bisa di-${input.action.toLowerCase()} paksa.`, 409);
+        return fail(
+          `Status pembayaran (${current}) tidak bisa di-${input.action.toLowerCase()} paksa.`,
+          409
+        );
       }
       throw e;
     }

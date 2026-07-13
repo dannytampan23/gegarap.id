@@ -50,18 +50,37 @@ const nextConfig = {
     // static caching. Origins allow-listed from actual usage: OpenStreetMap
     // tiles, Supabase (photos/KTP), Google user-content (OAuth avatars),
     // Firebase Auth, and Midtrans Snap (sandbox + prod).
+    const useFirebaseEmulator = process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === 'true';
+    const scriptSrc = [
+      'script-src',
+      "'self'",
+      "'unsafe-inline'",
+      ...(useFirebaseEmulator ? ["'unsafe-eval'"] : []),
+      'https://apis.google.com',
+      'https://app.midtrans.com',
+      'https://app.sandbox.midtrans.com',
+    ].join(' ');
+    const frameSrc = [
+      'frame-src',
+      "'self'",
+      'https://*.firebaseapp.com',
+      'https://accounts.google.com',
+      'https://app.midtrans.com',
+      'https://app.sandbox.midtrans.com',
+      ...(useFirebaseEmulator ? ['http://127.0.0.1:9099'] : []),
+    ].join(' ');
     const cspReportOnly = [
       "default-src 'self'",
       "base-uri 'self'",
       "object-src 'none'",
       "frame-ancestors 'self'",
       "form-action 'self'",
-      "script-src 'self' 'unsafe-inline' https://apis.google.com https://app.midtrans.com https://app.sandbox.midtrans.com",
+      scriptSrc,
       "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: blob: https://*.supabase.co https://*.tile.openstreetmap.org https://*.googleusercontent.com",
+      "img-src 'self' data: blob: https://*.supabase.co https://*.tile.openstreetmap.org https://*.googleusercontent.com https://i.pravatar.cc",
       "font-src 'self' data:",
-      "connect-src 'self' https://*.googleapis.com https://*.supabase.co https://*.midtrans.com",
-      "frame-src 'self' https://*.firebaseapp.com https://accounts.google.com https://app.midtrans.com https://app.sandbox.midtrans.com",
+      "connect-src 'self' https://apis.google.com https://*.googleapis.com https://*.supabase.co https://*.midtrans.com",
+      frameSrc,
       "worker-src 'self' blob:",
       'report-uri /api/csp-report',
     ].join('; ');

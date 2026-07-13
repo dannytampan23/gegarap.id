@@ -1,8 +1,8 @@
 import 'server-only';
 import { cookies } from 'next/headers';
-import { FieldValue } from 'firebase-admin/firestore';
-import { adminAuth, adminDb } from './admin';
+import { adminAuth } from './admin';
 import prisma from '@/lib/prisma';
+import { enqueueIdentitySync } from '@/lib/identity-sync';
 
 export const SESSION_COOKIE = 'session';
 /** Session cookie lifetime — 14 days, matching the old JWT expiry. */
@@ -87,26 +87,20 @@ export async function ensureUserRecord(input: {
   name?: string | null;
   authProvider?: 'password' | 'google';
 }) {
-  const user = await prisma.user.upsert({
-    where: { id: input.uid },
-    update: {}, // keep name/role/phone intact on subsequent logins
-    create: {
-      id: input.uid,
-      email: input.email.toLowerCase(),
-      name: input.name?.trim() || input.email.split('@')[0],
-    },
-  });
-
-  const ref = adminDb.collection('users').doc(input.uid);
-  const snap = await ref.get();
-  if (!snap.exists) {
-    await ref.set({
-      email: user.email,
-      whatsapp: user.phone ?? null,
-      authProvider: input.authProvider ?? 'google',
-      createdAt: FieldValue.serverTimestamp(),
+  return prisma.$transaction(async (tx) => {
+    const user = await tx.user.upsert({
+      where: { id: input.uid },
+      update: {},
+      create: {
+        id: input.uid,
+        email: input.email.toLowerCase(),
+        name: input.name?.trim() || input.email.split('@')[0],
+      },
     });
-  }
-
-  return user;
+    await enqueueIdentitySync(tx, {
+      userId: user.id,
+      authProvider: input.authProvider ?? 'google',
+    });
+    return user;
+  });
 }

@@ -11,7 +11,7 @@ const completeSchema = z.object({
 });
 
 /** Job states from which the customer may confirm completion. */
-const COMPLETABLE_JOB = ['CONFIRMED', 'IN_PROGRESS', 'AWAITING_CONFIRMATION'];
+const COMPLETABLE_JOB = ['CONFIRMED', 'IN_PROGRESS', 'AWAITING_CONFIRMATION', 'COMPLETED'];
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   return handle(async () => {
@@ -25,7 +25,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     const job = await prisma.job.findUnique({
       where: { id },
-      include: { payment: true },
+      include: {
+        payment: { include: { payouts: { orderBy: { createdAt: 'desc' }, take: 1 } } },
+        review: true,
+      },
     });
 
     // Only the booking's owner may complete it.
@@ -33,7 +36,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (!COMPLETABLE_JOB.includes(job.status)) {
       return fail('Status booking tidak valid untuk diselesaikan.', 400);
     }
-    if (!job.payment || !['PAID', 'HELD'].includes(job.payment.status)) {
+    if (!job.payment || !['PAID', 'HELD', 'RELEASED'].includes(job.payment.status)) {
       return fail('Pembayaran belum terkonfirmasi.', 400);
     }
 
@@ -52,39 +55,45 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       throw e;
     }
 
-    // Mark the job done, save the review, and recompute the provider rating.
-    await prisma.$transaction(async (tx) => {
-      await tx.job.update({ where: { id: job.id }, data: { status: 'COMPLETED' } });
-      await tx.review.create({
-        data: {
-          jobId: job.id,
-          userId: session.user.id,
-          providerProfileId: job.providerProfileId,
-          rating,
-          comment: comment || null,
-        },
+    // Save the review idempotently and recompute the provider rating. The job
+    // status was committed atomically with the payment release above.
+    if (!job.review)
+      await prisma.$transaction(async (tx) => {
+        const created = await tx.review.createMany({
+          data: [
+            {
+              jobId: job.id,
+              userId: session.user.id,
+              providerProfileId: job.providerProfileId,
+              rating,
+              comment: comment || null,
+            },
+          ],
+          skipDuplicates: true,
+        });
+        if (created.count === 0) return;
+
+        const reviews = await tx.review.findMany({
+          where: { providerProfileId: job.providerProfileId },
+          select: { rating: true },
+        });
+        const avg = reviews.reduce((s, r) => s + r.rating, 0) / reviews.length;
+        await tx.providerProfile.update({
+          where: { id: job.providerProfileId },
+          data: {
+            rating: Math.round(avg * 10) / 10,
+            ratingCount: reviews.length,
+            completedJobs: { increment: 1 },
+          },
+        });
       });
-      const reviews = await tx.review.findMany({
-        where: { providerProfileId: job.providerProfileId },
-        select: { rating: true },
-      });
-      const avg = reviews.reduce((s, r) => s + r.rating, 0) / reviews.length;
-      await tx.providerProfile.update({
-        where: { id: job.providerProfileId },
-        data: {
-          rating: Math.round(avg * 10) / 10,
-          ratingCount: reviews.length,
-          completedJobs: { increment: 1 },
-        },
-      });
-    });
 
     return ok({
       released: true,
       payoutStatus: settle.status,
       providerAmount: job.payment.providerAmount,
       platformFee: job.payment.platformFee,
-      rating,
+      rating: job.review?.rating ?? rating,
     });
   })();
 }

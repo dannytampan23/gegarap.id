@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto';
 import MidtransClient from 'midtrans-client';
 import { logEvent, logAlert, notifyOps } from './logger';
 import { withRetry } from './retry';
@@ -222,25 +221,27 @@ export interface GatewayRefundResult {
  * Ask the gateway to return money to the customer. Without real credentials
  * (dev/mock) it is a logged no-op so the refund flow stays testable.
  *
- * IMPORTANT: callers move the Payment to REFUNDED in the DB first; if the gateway
- * call then FAILS we have a DB-vs-gateway mismatch, so we raise the highest
- * alarm + page ops (Bagian 10) for manual settlement rather than silently
- * swallowing it. The function itself never throws.
+ * Callers keep the Payment in REFUND_REQUESTED until this confirms success.
+ * Failures raise an ops alert and remain retryable through the stable refund key.
+ * The function itself never throws.
  */
 export async function refundViaGateway(input: GatewayRefundInput): Promise<GatewayRefundResult> {
   if (!isMidtransConfigured || !input.orderId) {
+    const productionFailure = process.env.NODE_ENV === 'production';
     logEvent('refund.gateway', {
       paymentId: input.paymentId,
       amount: input.amount,
       skipped: true,
       reason: !input.orderId ? 'no_order_id' : 'midtrans_not_configured',
     });
-    return { success: true, skipped: true };
+    return productionFailure
+      ? { success: false, skipped: true, failureReason: 'Gateway refund tidak lengkap.' }
+      : { success: true, skipped: true };
   }
 
   // A stable refund_key makes the gateway call itself idempotent, so a retry
   // after a transient failure can't double-refund.
-  const refundKey = `rf-${input.paymentId}-${randomUUID().slice(0, 8)}`;
+  const refundKey = `rf-${input.paymentId}`;
   try {
     const res = await withRetry(
       () =>

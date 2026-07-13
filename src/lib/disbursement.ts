@@ -43,6 +43,22 @@ export class MockDisbursementProvider implements IDisbursementProvider {
   }
 }
 
+/** Production-safe fallback: records a failed payout instead of inventing one. */
+export class DisabledDisbursementProvider implements IDisbursementProvider {
+  readonly name = 'DISABLED';
+  async disburse(req: DisbursementRequest): Promise<DisbursementResult> {
+    logEvent(
+      'disbursement.failed',
+      { provider: this.name, payoutId: req.payoutId, reason: 'provider_not_configured' },
+      'error'
+    );
+    return {
+      success: false,
+      failureReason: 'Pencairan otomatis belum dikonfigurasi. Dana tetap tercatat dan ditahan.',
+    };
+  }
+}
+
 /**
  * Real disbursement via Midtrans Iris. Uses the Iris creator API key
  * (`MIDTRANS_IRIS_API_KEY`), separate from the Snap/Core server key. Fails
@@ -75,7 +91,11 @@ export class GatewayDisbursementProvider implements IDisbursementProvider {
         };
       case 'gopay':
         if (!str('phone')) return null;
-        return { beneficiary_name: str('accountName') ?? 'Provider', beneficiary_account: str('phone')!, beneficiary_bank: 'gopay' };
+        return {
+          beneficiary_name: str('accountName') ?? 'Provider',
+          beneficiary_account: str('phone')!,
+          beneficiary_bank: 'gopay',
+        };
       default:
         return null; // ovo/dana not supported by Iris in this build
     }
@@ -84,14 +104,33 @@ export class GatewayDisbursementProvider implements IDisbursementProvider {
   async disburse(req: DisbursementRequest): Promise<DisbursementResult> {
     const apiKey = process.env.MIDTRANS_IRIS_API_KEY;
     if (!apiKey) {
-      logEvent('disbursement.failed', { provider: this.name, payoutId: req.payoutId, reason: 'iris_api_key_missing' }, 'error');
-      return { success: false, failureReason: 'Iris API key (MIDTRANS_IRIS_API_KEY) belum dikonfigurasi.' };
+      logEvent(
+        'disbursement.failed',
+        { provider: this.name, payoutId: req.payoutId, reason: 'iris_api_key_missing' },
+        'error'
+      );
+      return {
+        success: false,
+        failureReason: 'Iris API key (MIDTRANS_IRIS_API_KEY) belum dikonfigurasi.',
+      };
     }
 
     const beneficiary = this.mapBeneficiary(req);
     if (!beneficiary) {
-      logEvent('disbursement.failed', { provider: this.name, payoutId: req.payoutId, reason: 'unsupported_or_incomplete_payout_details', method: req.recipient.method }, 'error');
-      return { success: false, failureReason: `Metode/detail payout tidak didukung Iris: ${req.recipient.method}.` };
+      logEvent(
+        'disbursement.failed',
+        {
+          provider: this.name,
+          payoutId: req.payoutId,
+          reason: 'unsupported_or_incomplete_payout_details',
+          method: req.recipient.method,
+        },
+        'error'
+      );
+      return {
+        success: false,
+        failureReason: `Metode/detail payout tidak didukung Iris: ${req.recipient.method}.`,
+      };
     }
 
     try {
@@ -110,11 +149,20 @@ export class GatewayDisbursementProvider implements IDisbursementProvider {
       });
       const payouts = (res.payouts as Array<Record<string, unknown>> | undefined) ?? [];
       const externalId = (payouts[0]?.reference_no as string | undefined) ?? undefined;
-      logEvent('disbursement.executed', { provider: this.name, payoutId: req.payoutId, amount: req.amount, externalId });
+      logEvent('disbursement.executed', {
+        provider: this.name,
+        payoutId: req.payoutId,
+        amount: req.amount,
+        externalId,
+      });
       return { success: true, externalId };
     } catch (err) {
       const failureReason = err instanceof Error ? err.message : String(err);
-      logEvent('disbursement.failed', { provider: this.name, payoutId: req.payoutId, failureReason }, 'error');
+      logEvent(
+        'disbursement.failed',
+        { provider: this.name, payoutId: req.payoutId, failureReason },
+        'error'
+      );
       return { success: false, failureReason };
     }
   }
@@ -127,5 +175,8 @@ export class GatewayDisbursementProvider implements IDisbursementProvider {
  */
 export function getDisbursementProvider(): IDisbursementProvider {
   if (process.env.DISBURSEMENT_PROVIDER === 'gateway') return new GatewayDisbursementProvider();
-  return new MockDisbursementProvider();
+  if (process.env.NODE_ENV !== 'production' && process.env.DISBURSEMENT_PROVIDER !== 'disabled') {
+    return new MockDisbursementProvider();
+  }
+  return new DisabledDisbursementProvider();
 }

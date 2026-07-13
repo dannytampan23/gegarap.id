@@ -9,7 +9,7 @@ test.describe('Auth — Email/WhatsApp + Password', () => {
     await page.goto('/login');
     await expect(page.getByRole('heading', { name: 'Masuk' })).toBeVisible();
     await expect(page.getByLabel('Email atau No. WhatsApp')).toBeVisible();
-    await expect(page.getByLabel('Kata sandi')).toBeVisible();
+    await expect(page.locator('#password')).toBeVisible();
     await expect(page.getByRole('button', { name: /Lanjutkan dengan Google/i })).toBeVisible();
   });
 
@@ -24,8 +24,8 @@ test.describe('Auth — Email/WhatsApp + Password', () => {
     await expect(page.getByLabel('Nama lengkap')).toBeVisible();
     await expect(page.getByLabel('Email')).toBeVisible();
     await expect(page.getByLabel('Nomor WhatsApp')).toBeVisible();
-    await expect(page.getByLabel('Kata sandi', { exact: true })).toBeVisible();
-    await expect(page.getByLabel('Konfirmasi kata sandi')).toBeVisible();
+    await expect(page.locator('#password')).toBeVisible();
+    await expect(page.locator('#confirm')).toBeVisible();
   });
 
   test('/dashboard redirect ke /login jika belum login', async ({ page }) => {

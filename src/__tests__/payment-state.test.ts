@@ -3,6 +3,7 @@ import type { Prisma } from '@prisma/client';
 import { mockPrisma } from './mocks/prisma';
 import {
   applyTransition,
+  applyTransitionWithJob,
   canTransition,
   isTerminal,
   isPaymentStatus,
@@ -20,9 +21,32 @@ describe('canTransition (legal-transition map)', () => {
   it('izinkan PENDING → PAID', () => expect(canTransition('PENDING', 'PAID')).toBe(true));
   it('izinkan PAID → HELD', () => expect(canTransition('PAID', 'HELD')).toBe(true));
   it('izinkan HELD → RELEASED', () => expect(canTransition('HELD', 'RELEASED')).toBe(true));
-  it('TOLAK out-of-order PAID → FAILED', () =>
-    expect(canTransition('PAID', 'FAILED')).toBe(false));
-  it('TOLAK dari terminal RELEASED', () => expect(canTransition('RELEASED', 'REFUNDED')).toBe(false));
+  it('TOLAK out-of-order PAID → FAILED', () => expect(canTransition('PAID', 'FAILED')).toBe(false));
+  it('TOLAK dari terminal RELEASED', () =>
+    expect(canTransition('RELEASED', 'REFUNDED')).toBe(false));
+});
+
+describe('applyTransitionWithJob', () => {
+  it('updates the payment and owning job through the same transaction client', async () => {
+    mockPrisma.payment.findUnique
+      .mockResolvedValueOnce({ id: 'p1', jobId: 'j1', status: 'PENDING' } as never)
+      .mockResolvedValueOnce({ id: 'p1', jobId: 'j1', status: 'PAID' } as never);
+    mockPrisma.payment.updateMany.mockResolvedValue({ count: 1 } as never);
+    mockPrisma.paymentEvent.create.mockResolvedValue({ id: 'evt1' } as never);
+    mockPrisma.job.update.mockResolvedValue({ id: 'j1', status: 'CONFIRMED' } as never);
+
+    await applyTransitionWithJob(db, {
+      paymentId: 'p1',
+      to: 'PAID',
+      triggeredBy: 'WEBHOOK',
+      jobStatus: 'CONFIRMED',
+    });
+
+    expect(mockPrisma.job.update).toHaveBeenCalledWith({
+      where: { id: 'j1' },
+      data: { status: 'CONFIRMED' },
+    });
+  });
 });
 
 describe('isTerminal', () => {
