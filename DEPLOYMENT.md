@@ -100,7 +100,14 @@ schema with `prisma migrate deploy` (forward-only, never resets data).
 | `VERCEL_TOKEN` | <https://vercel.com/account/tokens> | deploy jobs |
 | `VERCEL_ORG_ID` | `.vercel/project.json` → `orgId` | deploy jobs |
 | `VERCEL_PROJECT_ID` | `.vercel/project.json` → `projectId` | deploy jobs |
-| `DATABASE_URL` | Postgres public URL | `migrate` job + CI build fallback |
+
+The migration job pulls `DIRECT_URL` from the authenticated Vercel production
+environment. Do not duplicate database credentials in GitHub Actions secrets.
+Keep `DATABASE_URL` and `DIRECT_URL` as regular encrypted Vercel variables (not
+Vercel's write-only **Sensitive** type), because `vercel pull` intentionally
+returns write-only values as empty strings. Access remains limited to the Vercel
+project and its authenticated CI token. API admin keys such as
+`SUPABASE_SECRET_KEY` should remain write-only Sensitive variables.
 
 > Never commit secrets. `.env` / `.env*.local` are git-ignored; `.env.example`
 > and `.env.production.example` document the shape only.
@@ -118,8 +125,11 @@ Firestore rules). Everything else is **secret**. Do **not** set any
 | `NEXT_PUBLIC_FIREBASE_API_KEY` | Vercel + local | Firebase web config (public) |
 | `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN` | Vercel + local | `gegarap.firebaseapp.com` |
 | `NEXT_PUBLIC_FIREBASE_PROJECT_ID` | Vercel + local | `gegarap` |
+| `NEXT_PUBLIC_WA_SUPPORT` / `NEXT_PUBLIC_EMAIL_SUPPORT` / `NEXT_PUBLIC_EMAIL_PRIVACY` | Vercel + local | optional; missing channels are hidden, invalid/placeholders fail the build |
 | `FIREBASE_SERVICE_ACCOUNT_KEY` | Vercel (secret) | Admin SDK JSON, one line |
-| `DATABASE_URL` | Vercel + GitHub (secret) | managed Postgres public URL |
+| `DATABASE_URL` | Vercel (secret) | Supabase transaction pooler (runtime), `?uselibpqcompat=true&sslmode=require` |
+| `DIRECT_URL` | Vercel (secret) | Supabase session pooler (migrations), `?uselibpqcompat=true&sslmode=require` |
+| `DATABASE_POOL_MAX` | Vercel | max connections per function instance (default `3`) |
 | `APP_URL` | Vercel | deployed origin, e.g. `https://gegarap.id` |
 | `MIDTRANS_SERVER_KEY` | Vercel (secret) | payments |
 | `MIDTRANS_CLIENT_KEY` / `NEXT_PUBLIC_MIDTRANS_CLIENT_KEY` | Vercel | Snap client |
@@ -140,7 +150,7 @@ Firestore rules). Everything else is **secret**. Do **not** set any
 | Action | Result |
 | --- | --- |
 | Open / update a **Pull Request** | `ci` runs; on success a **Vercel preview** is built and the URL is commented on the PR |
-| **Merge / push to `main`** | `ci` → `migrate` (Postgres) → **production deploy** to Vercel |
+| **Merge / push to `main`** | `ci` → pull Vercel env → `migrate` (Supabase) → **production deploy** |
 | Manual redeploy | `git commit --allow-empty -m "redeploy" && git push` |
 
 ---

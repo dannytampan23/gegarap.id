@@ -1,11 +1,9 @@
 /**
- * Build-time guard: refuse to build with placeholder / missing support contact.
+ * Build-time guard: refuse to build with invalid or placeholder support contacts.
  *
- * Wired as the npm `prebuild` step, so a deploy (Vercel injects env into
- * process.env) HARD-FAILS before `next build` if any support channel is absent
- * or still the placeholder value. This is the enforcement half of the safe
- * fallback in src/lib/site.ts — together they guarantee users never see a dead
- * support link in production.
+ * Wired as the npm `prebuild` step. Invalid or placeholder contacts HARD-FAIL
+ * before `next build`; absent contacts are allowed because src/lib/site.ts hides
+ * those CTAs. Together they guarantee users never see a fabricated/dead link.
  *
  * Escape hatch for local production builds: set ALLOW_PLACEHOLDER_CONTACT=1.
  * Note: this plain Node process does not auto-load .env files — on Vercel the
@@ -58,10 +56,11 @@ if (process.env.ALLOW_PLACEHOLDER_CONTACT) {
 }
 
 const failures = [];
+const missing = [];
 for (const [label, [envVar, validate]] of Object.entries(CHECKS)) {
   const raw = process.env[envVar]?.trim();
   if (!raw) {
-    failures.push(`${label} (${envVar}): missing`);
+    missing.push(`${label} (${envVar})`);
     continue;
   }
   if (PLACEHOLDERS.has(raw)) {
@@ -79,6 +78,12 @@ if (failures.length > 0) {
     '\n   Set real values in the environment, or ALLOW_PLACEHOLDER_CONTACT=1 to bypass locally.\n'
   );
   process.exit(1);
+}
+
+if (missing.length > 0) {
+  console.warn(
+    `⚠️  Support contacts not configured; corresponding CTAs will be hidden: ${missing.join(', ')}`
+  );
 }
 
 console.log('✅ Support contact env validated.');

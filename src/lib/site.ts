@@ -5,8 +5,8 @@
  * Contact channels are sourced from env (NEXT_PUBLIC_*) so they are NEVER
  * hardcoded. Known placeholder values are treated as "not configured" → null, so
  * a misconfig degrades gracefully (the CTA hides) instead of linking users to a
- * dead number/inbox. The production build is HARD-BLOCKED if a channel is missing
- * or still a placeholder — see scripts/check-env.mjs (npm `prebuild`).
+ * dead number/inbox. The production build rejects configured placeholders and
+ * invalid values, while absent channels remain hidden — see scripts/check-env.mjs.
  */
 
 /** Values that must never reach users — keep in sync with scripts/check-env.mjs. */

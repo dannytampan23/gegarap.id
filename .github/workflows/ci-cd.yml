@@ -55,17 +55,17 @@ jobs:
         env:
           # The build does not query the DB (DB-backed pages are rendered
           # per-request), but the Prisma pg adapter needs a well-formed URL
-          # string when `src/lib/prisma.ts` is imported. Use the real secret
-          # if available, otherwise a harmless placeholder for fork PRs.
-          DATABASE_URL: ${{ secrets.DATABASE_URL || 'postgresql://placeholder:placeholder@localhost:5432/placeholder?schema=public' }}
+          # string when `src/lib/prisma.ts` is imported. CI never queries the
+          # database, so it must not depend on a production database secret.
+          DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder?schema=public
           # This CI build is a throwaway COMPILE GATE — its artifacts are not
           # shipped (the real production build runs in the deploy job via
           # `vercel build --prod`, which uses vercel.json's buildCommand and the
-          # real NEXT_PUBLIC_* support-contact env pulled from the Vercel project,
+          # production infrastructure/contact env pulled from the Vercel project,
           # NOT this npm `prebuild` gate). The support-contact values aren't
           # available to this runner, so bypass the placeholder guard here; it
-          # still enforces real contacts at the deploy build. Without this the
-          # gate fails and blocks every deploy (broken since 2026-06-27).
+          # still rejects configured placeholders/invalid values at deploy time,
+          # while absent channels are hidden safely by the UI.
           ALLOW_PLACEHOLDER_CONTACT: '1'
           # NEXT_PUBLIC_* values are inlined at build time and are public by
           # design (governed by Firestore rules, not secrecy). The client auth
@@ -88,6 +88,9 @@ jobs:
     needs: ci
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
     steps:
       - uses: actions/checkout@v4
 
@@ -100,12 +103,16 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install Vercel CLI
+        run: npm i -g vercel@54.4.1
+
+      - name: Pull production database configuration
+        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+
       - name: Apply migrations (prisma migrate deploy)
-        run: npm run db:migrate:deploy
-        env:
-          # Must be the Supabase pooler/direct connection URL, reachable from
-          # GitHub's runners. Store it as the DATABASE_URL repository secret.
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        # Vercel is the single source of truth. DIRECT_URL uses Supabase's
+        # session pooler; DATABASE_URL remains the transaction-pooled runtime URL.
+        run: npm run db:migrate:vercel -- .vercel/.env.production.local
 
   # ----------------------------------------------------------------------- #
   # 3. PRODUCTION DEPLOY — Vercel (full Next.js app: UI + API routes)       #
