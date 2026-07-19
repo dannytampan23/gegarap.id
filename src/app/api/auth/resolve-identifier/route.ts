@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { adminDb, AdminUnavailableError, withAdminTimeout } from '@/lib/firebase/admin';
 import { normalizePhone, isValidIndonesianPhone } from '@/lib/validations/auth';
+import { durableRateLimit, clientIp } from '@/lib/rate-limit';
 
 /**
  * Resolve a WhatsApp number → the account's email, server-side only.
@@ -14,6 +15,17 @@ import { normalizePhone, isValidIndonesianPhone } from '@/lib/validations/auth';
  * Google-only account with a helpful message instead of a failed password login.
  */
 export async function POST(req: Request) {
+  const limit = await durableRateLimit(`auth:resolve-identifier:${clientIp(req)}`, {
+    windowMs: 60_000,
+    max: 5,
+  });
+  if (!limit.ok) {
+    return NextResponse.json(
+      { error: 'Terlalu banyak percobaan. Coba lagi sebentar lagi.' },
+      { status: 429, headers: { 'Retry-After': String(limit.retryAfter) } }
+    );
+  }
+
   const body = await req.json().catch(() => null);
   const raw = typeof body?.whatsapp === 'string' ? body.whatsapp : '';
   const phone = normalizePhone(raw);
@@ -37,7 +49,8 @@ export async function POST(req: Request) {
   }
 
   if (snap.empty) {
-    return NextResponse.json({ error: 'Akun tidak ditemukan.' }, { status: 404 });
+    // Keep account existence opaque to callers.
+    return NextResponse.json({ error: 'Nomor atau kredensial tidak valid.' }, { status: 401 });
   }
 
   const data = snap.docs[0].data();

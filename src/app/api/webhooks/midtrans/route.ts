@@ -8,8 +8,28 @@ import { handleMidtransWebhook } from '@/lib/services/midtrans-webhook';
  * (the service only throws when an event must be reprocessed, never recording it).
  */
 export async function POST(req: Request) {
-  const body = await req.json().catch(() => null);
-  if (!body) return NextResponse.json({ ok: false }, { status: 400 });
+  const MAX_BODY_BYTES = 64 * 1024;
+  const contentLength = Number(req.headers.get('content-length'));
+  if (Number.isFinite(contentLength) && contentLength > MAX_BODY_BYTES) {
+    return NextResponse.json({ ok: false }, { status: 413 });
+  }
+
+  const raw = await req.text().catch(() => '');
+  if (!raw) return NextResponse.json({ ok: false }, { status: 400 });
+  if (Buffer.byteLength(raw, 'utf8') > MAX_BODY_BYTES) {
+    return NextResponse.json({ ok: false }, { status: 413 });
+  }
+
+  let body: Parameters<typeof handleMidtransWebhook>[0];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return NextResponse.json({ ok: false }, { status: 400 });
+    }
+    body = parsed as Parameters<typeof handleMidtransWebhook>[0];
+  } catch {
+    return NextResponse.json({ ok: false }, { status: 400 });
+  }
 
   const result = await handleMidtransWebhook(body);
   return NextResponse.json(result.payload, { status: result.httpStatus });

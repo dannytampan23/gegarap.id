@@ -17,6 +17,14 @@ function webhookRequest(payload: Record<string, unknown>): Request {
   });
 }
 
+function rawWebhookRequest(body: string): Request {
+  return new Request('http://localhost/api/webhooks/midtrans', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body,
+  });
+}
+
 function settlementPayload(over: Record<string, unknown> = {}) {
   const order_id = 'GGR-job1-1';
   const status_code = '200';
@@ -37,6 +45,13 @@ describe('Midtrans webhook', () => {
     process.env.MIDTRANS_SERVER_KEY = SERVER_KEY;
     mockPrisma.webhookEvent.findUnique.mockResolvedValue(null as never);
     mockPrisma.webhookEvent.create.mockResolvedValue({} as never);
+  });
+
+  it('menolak body webhook yang terlalu besar sebelum diproses', async () => {
+    const res = await POST(rawWebhookRequest(JSON.stringify({ padding: 'x'.repeat(65 * 1024) })));
+
+    expect(res.status).toBe(413);
+    expect(mockPrisma.webhookEvent.findUnique).not.toHaveBeenCalled();
   });
 
   it('duplikat (sudah ada di ledger) → 200 tanpa proses ulang', async () => {

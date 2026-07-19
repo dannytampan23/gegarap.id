@@ -174,8 +174,9 @@ async function rateLimitUpstash(
 }
 
 /**
- * Apply a fixed-window limit to `key`. Uses Upstash Redis when configured
- * (authoritative across instances), otherwise an in-memory per-instance counter.
+ * Apply a fixed-window limit to `key`. Uses Upstash Redis when configured;
+ * production falls back to the durable PostgreSQL bucket, while local
+ * development may use the in-memory counter.
  */
 export async function rateLimit(
   key: string,
@@ -185,8 +186,11 @@ export async function rateLimit(
   if (creds) {
     const result = await rateLimitUpstash(key, opts, creds);
     if (result) return result;
-    // Upstash unreachable → degrade to the in-memory limiter rather than 500.
+    // In production, never silently downgrade an abuse control to a
+    // per-instance counter. PostgreSQL is already a required dependency.
+    if (process.env.NODE_ENV === 'production') return durableRateLimit(key, opts);
   }
+  if (process.env.NODE_ENV === 'production') return durableRateLimit(key, opts);
   return rateLimitMemory(key, opts);
 }
 

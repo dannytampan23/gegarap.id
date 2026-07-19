@@ -3,7 +3,7 @@ import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { ok, fail } from '@/lib/api';
 import { getSession } from '@/lib/firebase/session';
-import { rateLimit, clientIp } from '@/lib/rate-limit';
+import { durableRateLimit, clientIp } from '@/lib/rate-limit';
 import { cacheGet, cacheSet } from '@/lib/cache';
 import { extractFilters } from '@/lib/ai/extract';
 import { searchProviders, type SearchedProvider } from '@/lib/ai/search';
@@ -61,8 +61,13 @@ export async function POST(req: Request) {
 
     const sessionId: string | undefined =
       typeof body.sessionId === 'string' && body.sessionId.length <= 64 ? body.sessionId : undefined;
-    const limiterKey = `ai:chat:${sessionId ?? clientIp(req)}`;
-    const limit = await rateLimit(limiterKey, { windowMs: 60_000, max: 20 });
+    // The client-controlled conversation id is only a persistence key. It must
+    // never be the abuse-control identity: callers can rotate it per request.
+    const limiterIdentity = userId ? `user:${userId}` : `ip:${clientIp(req)}`;
+    const limit = await durableRateLimit(`ai:chat:${limiterIdentity}`, {
+      windowMs: 60_000,
+      max: 20,
+    });
     if (!limit.ok) {
       return fail('Terlalu banyak permintaan. Coba lagi sebentar lagi.', 429);
     }

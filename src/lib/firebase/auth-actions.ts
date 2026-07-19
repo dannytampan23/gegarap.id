@@ -38,7 +38,9 @@ export async function resolveWhatsapp(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ whatsapp }),
   });
-  if (res.status === 404) throw new Error('NOT_FOUND');
+  // The API intentionally uses the same generic status/message for an
+  // unknown number to avoid account enumeration.
+  if (res.status === 401) throw new Error('NOT_FOUND');
   if (!res.ok) throw new Error('RESOLVE_FAILED');
   return res.json();
 }
