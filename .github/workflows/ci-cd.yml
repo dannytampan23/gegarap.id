@@ -4,7 +4,7 @@ name: CI/CD
 # Flow
 #   push / PR  ->  ci (lint + typecheck + build)            [gate]
 #   PR         ->  deploy-preview  (Vercel preview URL)
-#   push main  ->  migrate (Railway Postgres) -> deploy-production (Vercel)
+#   push main  ->  migrate (Supabase Postgres) -> deploy-production (Vercel)
 #
 # Deploys only run AFTER the ci gate passes, so a broken build never ships.
 # ---------------------------------------------------------------------------
@@ -80,11 +80,11 @@ jobs:
         run: npm test --if-present
 
   # ----------------------------------------------------------------------- #
-  # 2. DB MIGRATIONS — apply Prisma migrations to Railway Postgres          #
+  # 2. DB MIGRATIONS — apply Prisma migrations to Supabase Postgres          #
   #    Runs only on push to main, after ci passes, before the app deploys.  #
   # ----------------------------------------------------------------------- #
   migrate:
-    name: Migrate Railway Postgres
+    name: Migrate Supabase Postgres
     needs: ci
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -103,8 +103,8 @@ jobs:
       - name: Apply migrations (prisma migrate deploy)
         run: npm run db:migrate:deploy
         env:
-          # Must be the Railway *public* connection URL (……proxy.rlwy.net),
-          # reachable from GitHub's runners.
+          # Must be the Supabase pooler/direct connection URL, reachable from
+          # GitHub's runners. Store it as the DATABASE_URL repository secret.
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
   # ----------------------------------------------------------------------- #

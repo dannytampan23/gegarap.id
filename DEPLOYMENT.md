@@ -67,7 +67,7 @@ In the [Firebase console](https://console.firebase.google.com/project/gegarap):
 
 ### 2. Postgres (managed cloud DB)
 
-Provision a managed Postgres (Railway/Neon/Supabase). Use a pooled/public
+Provision Supabase Postgres. Use the Supabase pooler/public
 connection string with Prisma-friendly serverless params:
 ```
 postgresql://USER:PASSWORD@HOST:PORT/db?schema=public&connection_limit=5&pool_timeout=20
@@ -124,7 +124,7 @@ Firestore rules). Everything else is **secret**. Do **not** set any
 | `MIDTRANS_SERVER_KEY` | Vercel (secret) | payments |
 | `MIDTRANS_CLIENT_KEY` / `NEXT_PUBLIC_MIDTRANS_CLIENT_KEY` | Vercel | Snap client |
 | `MIDTRANS_IS_PRODUCTION` | Vercel | `true` in prod |
-| `SUPABASE_URL` / `SUPABASE_ANON_KEY` / `SUPABASE_BUCKET` | Vercel | KTP storage |
+| `SUPABASE_URL` / `SUPABASE_PUBLISHABLE_KEY` / `SUPABASE_SECRET_KEY` / `SUPABASE_BUCKET` | Vercel | private document storage |
 | `WHATSAPP_ACCESS_TOKEN` / `WHATSAPP_PHONE_NUMBER_ID` | Vercel (secret) | Meta Cloud API |
 | `WHATSAPP_OTP_TEMPLATE` / `WHATSAPP_OTP_LANG` | Vercel | OTP template name/lang |
 | `VERCEL_TOKEN` / `VERCEL_ORG_ID` / `VERCEL_PROJECT_ID` | GitHub (secret) | deploy |

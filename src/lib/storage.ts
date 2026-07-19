@@ -2,16 +2,18 @@ import { randomUUID, createHash } from 'node:crypto';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY =
-  process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_KEY;
+const SUPABASE_SECRET_KEY =
+  process.env.SUPABASE_SECRET_KEY ??
+  process.env.SUPABASE_SERVICE_ROLE_KEY ??
+  process.env.SUPABASE_SERVICE_KEY;
 const SUPABASE_BUCKET =
   process.env.SUPABASE_PRIVATE_DOC_BUCKET ?? process.env.SUPABASE_BUCKET ?? 'private-documents';
 
-export const isStorageConfigured = Boolean(SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY);
+export const isStorageConfigured = Boolean(SUPABASE_URL && SUPABASE_SECRET_KEY);
 export const DEV_PLACEHOLDER_PATH = 'dev/private-doc-placeholder';
 
 function admin(): SupabaseClient {
-  return createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!, {
+  return createClient(SUPABASE_URL!, SUPABASE_SECRET_KEY!, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 }
@@ -33,7 +35,7 @@ export async function uploadPrivateDocument(params: {
 
   if (!isStorageConfigured) {
     if (process.env.NODE_ENV !== 'production') return { path: `${DEV_PLACEHOLDER_PATH}-${params.kind}` };
-    throw new Error('Penyimpanan dokumen belum dikonfigurasi (SUPABASE_SERVICE_ROLE_KEY kosong).');
+    throw new Error('Penyimpanan dokumen belum dikonfigurasi (SUPABASE_SECRET_KEY kosong).');
   }
 
   const { error } = await admin()
