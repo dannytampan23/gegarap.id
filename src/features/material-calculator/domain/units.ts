@@ -25,6 +25,12 @@ export function toMetres(value: number, unit: LengthUnit): number {
   return value * TO_METRES[unit];
 }
 
+/** Convert a metre-normalised length back to the requested display unit. */
+export function fromMetres(value: number, unit: LengthUnit): number {
+  if (!Number.isFinite(value)) return 0;
+  return value / TO_METRES[unit];
+}
+
 /** Round a value according to a Rounding strategy. */
 export function applyRounding(value: number, mode: Rounding = 'ceil'): number {
   if (!Number.isFinite(value)) return 0;

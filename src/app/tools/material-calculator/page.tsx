@@ -32,7 +32,7 @@ export default function MaterialCalculatorPage() {
 
       {/* Header */}
       <section className="border-b border-border bg-card">
-        <div className="container py-10 sm:py-12">
+        <div className="container py-8 sm:py-10">
           <nav className="mb-4 flex items-center gap-1.5 text-sm text-muted-foreground">
             <Link href="/" className="transition-colors hover:text-foreground">
               Beranda
@@ -41,7 +41,7 @@ export default function MaterialCalculatorPage() {
             <span className="font-medium text-foreground">Kalkulator Material</span>
           </nav>
 
-          <div className="flex items-start gap-4">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
             <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-glow">
               <Calculator className="h-6 w-6" />
             </span>
@@ -54,17 +54,22 @@ export default function MaterialCalculatorPage() {
                 muncul saat Anda mengetik. Sesuaikan harga sesuai wilayah, lalu cari tukang untuk
                 mengerjakannya.
               </p>
-              <p className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-primary-light px-3 py-1 text-xs font-semibold text-primary-800">
-                <Sparkles className="h-3.5 w-3.5" />
-                Gratis, tanpa perlu login
-              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <p className="inline-flex items-center gap-1.5 rounded-full bg-primary-light px-3 py-1 text-xs font-semibold text-primary-800">
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Gratis, tanpa perlu login
+                </p>
+                <p className="inline-flex rounded-full bg-muted px-3 py-1 text-xs font-semibold text-muted-foreground">
+                  Hasil berubah otomatis
+                </p>
+              </div>
             </div>
           </div>
         </div>
       </section>
 
       {/* Tool */}
-      <section className="container py-8 sm:py-10">
+      <section className="container py-6 sm:py-8">
         <MaterialCalculator />
       </section>
     </div>

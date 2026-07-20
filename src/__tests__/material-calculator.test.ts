@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { z } from 'zod';
-import { toMetres, applyRounding } from '@/features/material-calculator/domain/units';
+import { toMetres, fromMetres, applyRounding } from '@/features/material-calculator/domain/units';
 import { getFormula, FORMULAS } from '@/features/material-calculator/configs/material-formulas';
 import {
   runCalculation,
@@ -23,6 +23,13 @@ describe('units', () => {
     expect(toMetres(600, 'cm')).toBeCloseTo(6);
     expect(toMetres(6000, 'mm')).toBeCloseTo(6);
     expect(toMetres(Number.NaN, 'm')).toBe(0);
+  });
+
+  it('converts metre-normalised lengths back to display units', () => {
+    expect(fromMetres(6, 'm')).toBe(6);
+    expect(fromMetres(6, 'cm')).toBe(600);
+    expect(fromMetres(6, 'mm')).toBe(6000);
+    expect(fromMetres(Number.NaN, 'm')).toBe(0);
   });
 
   it('rounds by strategy', () => {

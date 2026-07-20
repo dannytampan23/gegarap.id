@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState, useCallback } from 'react';
-import { AlertTriangle, Save, History, RotateCcw, Trash2 } from 'lucide-react';
+import { AlertTriangle, Save, History, RotateCcw, Trash2, Ruler, ClipboardList } from 'lucide-react';
 import { fieldErrors } from '@/lib/validations';
 import { cn, formatCurrency } from '@/lib/utils';
 import type { CalculationResult, Formula, LengthUnit } from '../domain/types';
@@ -13,6 +13,7 @@ import { DimensionInput } from './DimensionInput';
 import { ResultCard } from './ResultCard';
 import { CostEstimator, type LaborState } from './CostEstimator';
 import { useCalculatorHistory, type CalculatorSnapshot } from './useCalculatorHistory';
+import { fromMetres, toMetres } from '../domain/units';
 
 type RawInputs = Record<string, string>;
 type Units = Record<string, LengthUnit>;
@@ -73,8 +74,16 @@ export function MaterialCalculator() {
     setInputs((prev) => ({ ...prev, [key]: value }));
   }, []);
 
-  const setUnit = useCallback((key: string, unit: LengthUnit) => {
+  const setUnit = useCallback((key: string, unit: LengthUnit, previousUnit: LengthUnit) => {
     setUnits((prev) => ({ ...prev, [key]: unit }));
+    setInputs((prev) => {
+      const numeric = Number(prev[key]);
+      if (!Number.isFinite(numeric)) return prev;
+
+      const metres = toMetres(numeric, previousUnit);
+      const converted = fromMetres(metres, unit);
+      return { ...prev, [key]: Number(converted.toPrecision(12)).toString() };
+    });
   }, []);
 
   const setPrice = useCallback((key: string, value: number) => {
@@ -119,19 +128,25 @@ export function MaterialCalculator() {
     <div className="space-y-6">
       <JobSelector formulas={FORMULAS} selectedId={jobId} onSelect={selectJob} />
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_1.1fr]">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(420px,1.05fr)]">
         {/* ── Inputs ─────────────────────────────────────────────── */}
         <div className="space-y-4">
-          <div className="rounded-2xl border border-border bg-card p-5">
-            <div className="mb-4 flex items-center justify-between">
-              <div>
+          <div className="rounded-2xl border border-border bg-card p-5 shadow-soft">
+            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
+                <p className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-primary">
+                  <Ruler className="h-3.5 w-3.5" />
+                  Langkah 2
+                </p>
                 <h2 className="text-lg font-bold text-foreground">{formula.label}</h2>
-                <p className="text-sm text-muted-foreground">{formula.description}</p>
+                <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                  {formula.description}
+                </p>
               </div>
               <button
                 type="button"
                 onClick={resetForm}
-                className="flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                className="inline-flex shrink-0 items-center gap-1.5 self-start rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
                 <RotateCcw className="h-3.5 w-3.5" />
                 Reset
@@ -147,7 +162,7 @@ export function MaterialCalculator() {
                   unit={units[spec.key] ?? 'm'}
                   error={errors[spec.key]}
                   onValueChange={(v) => setInputValue(spec.key, v)}
-                  onUnitChange={(u) => setUnit(spec.key, u)}
+                  onUnitChange={(u, previousUnit) => setUnit(spec.key, u, previousUnit)}
                 />
               ))}
             </div>
@@ -164,13 +179,20 @@ export function MaterialCalculator() {
 
         {/* ── Result ─────────────────────────────────────────────── */}
         <div className="lg:sticky lg:top-24 lg:self-start">
-          <div className="mb-3 flex items-center justify-end">
+          <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-primary">
+                <ClipboardList className="h-3.5 w-3.5" />
+                Langkah 3
+              </p>
+              <h2 className="text-lg font-bold text-foreground">Cek hasil estimasi</h2>
+            </div>
             <button
               type="button"
               onClick={saveToHistory}
               disabled={!result}
               className={cn(
-                'flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground shadow-soft transition-colors hover:bg-muted',
+                'inline-flex items-center justify-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground shadow-soft transition-colors hover:bg-muted',
                 !result && 'cursor-not-allowed opacity-50 hover:bg-card'
               )}
             >

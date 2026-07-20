@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { ChevronDown, Wallet } from 'lucide-react';
+import { ChevronDown, Wallet, Users } from 'lucide-react';
 import { Field } from '@/components/ui/Field';
 import { Input } from '@/components/ui/Input';
 import { cn } from '@/lib/utils';
@@ -40,36 +40,54 @@ export function CostEstimator({
   const materialKeys = Array.from(new Set(formula.materials.map((m) => m.material)));
 
   return (
-    <div className="rounded-2xl border border-border bg-card">
+    <div className="rounded-2xl border border-border bg-card shadow-soft">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="flex w-full items-center justify-between gap-2 px-4 py-3.5 text-left"
+        className="flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left"
       >
-        <span className="flex items-center gap-2 text-sm font-bold text-foreground">
-          <Wallet className="h-4 w-4 text-primary" />
-          Estimasi Biaya (opsional)
+        <span className="min-w-0">
+          <span className="flex items-center gap-2 text-sm font-bold text-foreground">
+            <Wallet className="h-4 w-4 text-primary" />
+            Atur biaya opsional
+          </span>
+          <span className="mt-0.5 block text-xs text-muted-foreground">
+            Sesuaikan harga material dan upah tanpa mengubah volume.
+          </span>
         </span>
         <ChevronDown
-          className={cn('h-4 w-4 text-muted-foreground transition-transform', open && 'rotate-180')}
+          className={cn(
+            'h-4 w-4 shrink-0 text-muted-foreground transition-transform',
+            open && 'rotate-180'
+          )}
         />
       </button>
 
       {open && (
         <div className="space-y-5 border-t border-border p-4 animate-fade-in">
           {/* Labour toggle */}
-          <div>
-            <label className="flex cursor-pointer items-center gap-3">
+          <div className="rounded-xl border border-border bg-background p-3">
+            <label className="flex cursor-pointer items-center justify-between gap-3">
+              <span className="flex items-center gap-2">
+                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-light text-primary">
+                  <Users className="h-4 w-4" />
+                </span>
+                <span>
+                  <span className="block text-sm font-semibold text-foreground">
+                    Sertakan biaya upah tukang
+                  </span>
+                  <span className="block text-xs text-muted-foreground">
+                    Perhitungan hari kerja mengikuti produktivitas pekerjaan.
+                  </span>
+                </span>
+              </span>
               <input
                 type="checkbox"
                 checked={labor.enabled}
                 onChange={(e) => onLaborChange({ enabled: e.target.checked })}
                 className="h-4 w-4 rounded border-border text-primary focus:ring-primary/30"
               />
-              <span className="text-sm font-semibold text-foreground">
-                Sertakan biaya upah tukang
-              </span>
             </label>
 
             {labor.enabled && (

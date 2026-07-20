@@ -12,7 +12,7 @@ interface DimensionInputProps {
   unit: LengthUnit;
   error?: string;
   onValueChange: (value: string) => void;
-  onUnitChange: (unit: LengthUnit) => void;
+  onUnitChange: (unit: LengthUnit, previousUnit: LengthUnit) => void;
 }
 
 /** Segmented m / cm / mm switch shown beside length fields. */
@@ -21,7 +21,7 @@ function UnitToggle({
   onChange,
 }: {
   value: LengthUnit;
-  onChange: (u: LengthUnit) => void;
+  onChange: (unit: LengthUnit, previousUnit: LengthUnit) => void;
 }) {
   return (
     <div
@@ -33,7 +33,7 @@ function UnitToggle({
         <button
           key={u}
           type="button"
-          onClick={() => onChange(u)}
+          onClick={() => onChange(u, value)}
           aria-pressed={value === u}
           className={cn(
             'rounded-md px-2.5 py-1 text-xs font-semibold transition-colors',
