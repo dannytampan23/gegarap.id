@@ -11,7 +11,10 @@ export function runQualityGuard(response: AssistantResponse, history: { role: st
     /berikut beberapa/i,
     /sebagai ai/i,
     /saya adalah model bahasa/i,
-    /menurut informasi yang saya miliki/i
+    /menurut informasi yang saya miliki/i,
+    /mind\s*blowing/i,
+    /rahasia yang jarang diketahui/i,
+    /penyebabnya pasti/i
   ];
   for (const pattern of roboticPatterns) {
     if (pattern.test(response.message)) {
@@ -21,6 +24,10 @@ export function runQualityGuard(response: AssistantResponse, history: { role: st
 
   if (response.message.includes('?')) {
     const questions = response.message.match(/[^.?!]+\?/g) || [];
+    if (questions.length > 2) {
+      reasons.push('Asked too many questions in one response');
+    }
+
     const lastQuestion = questions.length > 0 ? questions[questions.length - 1].trim().toLowerCase() : '';
     
     if (lastQuestion) {

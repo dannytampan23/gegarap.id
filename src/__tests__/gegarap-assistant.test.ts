@@ -5,6 +5,7 @@ import { evaluateBookingEligibility } from '@/ai/gegarap-assistant/booking-hando
 import { runQualityGuard } from '@/ai/gegarap-assistant/quality-guard';
 import { processChat } from '@/ai/gegarap-assistant/engine';
 import { assistantResponseSchema } from '@/ai/gegarap-assistant/validators';
+import { retrieveAssistantKnowledge, formatKnowledgeForPrompt } from '@/ai/gegarap-assistant/rag';
 import { AssistantResponse } from '@/ai/gegarap-assistant/types';
 
 describe('Gegarap Assistant Engine', () => {
@@ -136,6 +137,42 @@ describe('Gegarap Assistant Engine', () => {
       const guard = runQualityGuard(repeatedResponse, history);
       expect(guard.valid).toBe(false);
       expect(guard.reasons[0]).toContain('Repeated a question');
+    });
+
+    it('rejects clickbait insight phrasing', () => {
+      const hypeResponse = {
+        ...validResponse,
+        message: 'Ini mind blowing: penyebabnya pasti freon habis.',
+      };
+      const guard = runQualityGuard(hypeResponse, []);
+      expect(guard.valid).toBe(false);
+      expect(guard.reasons[0]).toContain('robotic pattern');
+    });
+
+    it('rejects interrogative responses with too many questions', () => {
+      const interrogativeResponse = {
+        ...validResponse,
+        message: 'AC-nya merek apa? Sudah berapa lama? Outdoor nyala? Ada es?',
+      };
+      const guard = runQualityGuard(interrogativeResponse, []);
+      expect(guard.valid).toBe(false);
+      expect(guard.reasons).toContain('Asked too many questions in one response');
+    });
+  });
+
+  describe('Lite RAG Context', () => {
+    it('retrieves targeted diagnosis snippets for the current issue', () => {
+      const snippets = retrieveAssistantKnowledge('AC tidak dingin tapi anginnya masih kencang', 'AC');
+      expect(snippets[0].id).toBe('ac-cold-airflow');
+      expect(snippets[0].insight).toContain('airflow');
+    });
+
+    it('formats RAG snippets into a compact prompt context', () => {
+      const snippets = retrieveAssistantKnowledge('MCB jeglek saat pompa air menyala', 'Tukang Listrik');
+      const prompt = formatKnowledgeForPrompt(snippets);
+      expect(prompt).toContain('KONTEKS RAG DIAGNOSA');
+      expect(prompt).toContain('Sinyal perlu teknisi');
+      expect(prompt).toContain('Hindari');
     });
   });
 

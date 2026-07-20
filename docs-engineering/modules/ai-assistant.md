@@ -1,8 +1,9 @@
 # Module: AI Assistant
 
-A consultation-first home-services assistant for Gegarap.id. It diagnoses user
-problems before recommending technicians, blocks unsafe DIY guidance, and only
-surfaces booking actions when the handoff logic says the user is ready.
+A consultation-first home-services assistant for Gegarap.id. It uses a lite LLM
+with compact keyword RAG, diagnoses user problems before recommending technicians,
+blocks unsafe DIY guidance, and only surfaces booking actions when the handoff
+logic says the user is ready.
 
 ## Purpose
 
@@ -28,9 +29,10 @@ The API also returns legacy UI compatibility fields (`pesan`, `rekomendasi`,
 - Classify service category from the latest message and recent history.
 - Detect critical safety risks before model or provider recommendation logic.
 - Build compact conversation memory so the assistant avoids repeated questions.
-- Assemble modular prompts for system, safety, diagnosis, booking, category, and tone rules.
+- Retrieve local diagnosis snippets plus provider shortlist context for grounded RAG.
+- Assemble modular prompts for system, safety, diagnosis, booking, category, tone, and insight rules.
 - Validate structured model output with Zod before returning it.
-- Apply quality guardrails for long, robotic, or repeated-question responses.
+- Apply quality guardrails for long, robotic, bombastic, over-questioning, or repeated-question responses.
 - Gate provider cards and booking CTA through `bookingEligible`.
 - Persist conversation turns without exposing prompt/debug data in production.
 
@@ -40,6 +42,7 @@ The API also returns legacy UI compatibility fields (`pesan`, `rekomendasi`,
 |------|------|
 | `src/ai/gegarap-assistant/engine.ts` | Orchestrates safety, prompts, model call, validation, quality guard, and booking handoff |
 | `src/ai/gegarap-assistant/prompts/*.ts` | Modular prompt rules |
+| `src/ai/gegarap-assistant/rag.ts` | Lightweight keyword RAG snippets for grounded diagnosis insights |
 | `src/ai/gegarap-assistant/safety-classifier.ts` | Critical danger keyword classifier |
 | `src/ai/gegarap-assistant/diagnosis-classifier.ts` | Category detection |
 | `src/ai/gegarap-assistant/memory.ts` | Compact conversation memory and question history |
@@ -60,6 +63,7 @@ POST /api/ai/chat
      -> safety classifier
      -> category classifier
      -> conversation memory
+     -> lightweight RAG snippet retrieval
      -> modular prompt assembly
      -> Anthropic tool response
      -> Zod validation
@@ -77,6 +81,8 @@ first through `processChat`.
 ## Production Notes
 
 - `ANTHROPIC_API_KEY` is required for model-backed consultation.
+- The default model is `claude-3-5-haiku-20241022` for lite, low-latency chat.
+  Override with `GEGARAP_AI_MODEL` and `GEGARAP_AI_MAX_TOKENS` when needed.
 - `NODE_ENV=production` strips any `debug` payload before responding.
 - Recommendations must only use provider data returned from the search layer.
 - Booking cards must not render unless `bookingEligible` is true.

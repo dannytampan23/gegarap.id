@@ -7,6 +7,7 @@ import { buildConversationMemory, formatMemoryForPrompt } from './memory';
 import { evaluateBookingEligibility } from './booking-handoff';
 import { runQualityGuard } from './quality-guard';
 import { assistantResponseSchema } from './validators';
+import { retrieveAssistantKnowledge, formatKnowledgeForPrompt } from './rag';
 
 import { SYSTEM_PROMPT } from './prompts/system';
 import { SAFETY_PROMPT } from './prompts/safety';
@@ -14,6 +15,10 @@ import { DIAGNOSIS_PROMPT } from './prompts/diagnosis';
 import { BOOKING_PROMPT } from './prompts/booking';
 import { CATEGORIES_PROMPT } from './prompts/categories';
 import { TONE_PROMPT } from './prompts/tone';
+import { INSIGHT_PROMPT } from './prompts/insight';
+
+const DEFAULT_LITE_MODEL = 'claude-3-5-haiku-20241022';
+const MAX_OUTPUT_TOKENS = 1024;
 
 const rp = (n: number) => `Rp ${n.toLocaleString('id-ID')}`;
 
@@ -103,6 +108,7 @@ export async function processChat(req: AssistantRequest): Promise<AssistantRespo
 
   const memory = buildConversationMemory(history);
   memory.category = category;
+  const knowledge = retrieveAssistantKnowledge(query, category);
 
   let extraPrompt = '';
   if (safety.isSafety) {
@@ -116,12 +122,17 @@ export async function processChat(req: AssistantRequest): Promise<AssistantRespo
     BOOKING_PROMPT,
     CATEGORIES_PROMPT,
     TONE_PROMPT,
+    INSIGHT_PROMPT,
     formatMemoryForPrompt(memory),
+    formatKnowledgeForPrompt(knowledge),
     extraPrompt
   ].join('\n\n');
 
   const providerContext = buildProviderContext(providers);
-  const userPrompt = `DATA TUKANG TERSEDIA:\n${providerContext}\n\nPERMINTAAN PENGGUNA TERBARU:\n"${query}"`;
+  const userPrompt =
+    `DATA TUKANG TERSEDIA:\n${providerContext}\n\n` +
+    `PERMINTAAN PENGGUNA TERBARU:\n"${query}"\n\n` +
+    'Gunakan konteks RAG diagnosa dan data tukang di system prompt. Jika keduanya tidak cukup, ajukan satu pertanyaan klarifikasi terbaik.';
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
@@ -169,8 +180,8 @@ export async function processChat(req: AssistantRequest): Promise<AssistantRespo
   };
 
   const res = await client.messages.create({
-    model: 'claude-3-5-sonnet-20240620',
-    max_tokens: 1536,
+    model: process.env.GEGARAP_AI_MODEL || DEFAULT_LITE_MODEL,
+    max_tokens: Number(process.env.GEGARAP_AI_MAX_TOKENS) || MAX_OUTPUT_TOKENS,
     system: fullSystemPrompt,
     messages,
     tools: [
