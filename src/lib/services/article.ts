@@ -15,6 +15,7 @@ import {
   type GeneratedArticle,
   type RelatedArticle,
 } from '@/lib/ai/content';
+import { STATIC_ARTICLES } from '@/lib/content/static-articles';
 
 /** Validates the admin "generate article" request body. */
 export const articleGenerateSchema = z.object({
@@ -135,23 +136,49 @@ export function listArticlesForAdmin() {
 }
 
 /** Public list of published articles (newest first), for /artikel. */
-export function listPublishedArticles() {
-  return prisma.article.findMany({
-    where: { status: 'PUBLISHED' },
-    orderBy: { publishedAt: 'desc' },
-    take: 100,
-    select: {
-      slug: true,
-      title: true,
-      metaDescription: true,
-      category: true,
-      location: true,
-      publishedAt: true,
-    },
-  });
+export async function listPublishedArticles() {
+  const staticRows = STATIC_ARTICLES.map((a) => ({
+    slug: a.slug,
+    title: a.title,
+    metaDescription: a.metaDescription,
+    category: a.category,
+    location: a.location,
+    publishedAt: a.publishedAt,
+  }));
+
+  let dbRows: typeof staticRows = [];
+  try {
+    dbRows = await prisma.article.findMany({
+      where: { status: 'PUBLISHED' },
+      orderBy: { publishedAt: 'desc' },
+      take: 100,
+      select: {
+        slug: true,
+        title: true,
+        metaDescription: true,
+        category: true,
+        location: true,
+        publishedAt: true,
+      },
+    });
+  } catch {
+    // Build-time or ISR DB hiccups should not hide curated static articles.
+  }
+
+  const dbSlugs = new Set(dbRows.map((a) => a.slug));
+  return [...dbRows, ...staticRows.filter((a) => !dbSlugs.has(a.slug))]
+    .sort((a, b) => (b.publishedAt?.getTime() ?? 0) - (a.publishedAt?.getTime() ?? 0))
+    .slice(0, 100);
 }
 
 /** One published article by slug (or null), for the public detail page. */
-export function getPublishedArticle(slug: string) {
-  return prisma.article.findFirst({ where: { slug, status: 'PUBLISHED' } });
+export async function getPublishedArticle(slug: string) {
+  try {
+    const row = await prisma.article.findFirst({ where: { slug, status: 'PUBLISHED' } });
+    if (row) return row;
+  } catch {
+    // Fall through to curated static article.
+  }
+
+  return STATIC_ARTICLES.find((a) => a.slug === slug) ?? null;
 }

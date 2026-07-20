@@ -1,6 +1,7 @@
 import type { MetadataRoute } from 'next';
 import { BASE_URL } from '@/lib/seo';
 import prisma from '@/lib/prisma';
+import { STATIC_ARTICLES } from '@/lib/content/static-articles';
 
 // Regenerate hourly (ISR) rather than per-request, and never let a DB hiccup
 // fail the build — fall back to the static routes only.
@@ -44,5 +45,15 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // next hourly revalidation.
   }
 
-  return [...staticEntries, ...articleEntries];
+  const knownArticleUrls = new Set(articleEntries.map((entry) => entry.url));
+  const staticArticleEntries: MetadataRoute.Sitemap = STATIC_ARTICLES.filter(
+    (article) => !knownArticleUrls.has(`${BASE_URL}/artikel/${article.slug}`)
+  ).map((article) => ({
+    url: `${BASE_URL}/artikel/${article.slug}`,
+    lastModified: article.updatedAt,
+    changeFrequency: 'monthly',
+    priority: 0.6,
+  }));
+
+  return [...staticEntries, ...articleEntries, ...staticArticleEntries];
 }
