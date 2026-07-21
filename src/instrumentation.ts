@@ -1,16 +1,14 @@
 /**
  * Next.js instrumentation hook (PROMPT MASTER Bagian 10).
  *
- * Activates Sentry ONLY when it's both installed (`npm i @sentry/nextjs`) and
- * configured (`SENTRY_DSN` set). The import uses a computed specifier + a guard
- * so the build never fails when the package is absent — until then `lib/sentry`
- * stays a no-op and the structured logger is the only sink.
+ * Activates Sentry when SENTRY_DSN is set. The guarded computed import keeps
+ * observability from breaking the app path it is supposed to watch; without a
+ * DSN, lib/sentry remains a no-op and structured logs stay as the baseline sink.
  */
 export async function register(): Promise<void> {
   if (!process.env.SENTRY_DSN) return;
 
   try {
-    // Computed specifier keeps the bundler from hard-resolving an optional dep.
     const moduleName = ['@sentry', 'nextjs'].join('/');
     const Sentry = (await import(/* webpackIgnore: true */ moduleName)) as {
       init: (opts: Record<string, unknown>) => void;
@@ -29,8 +27,7 @@ export async function register(): Promise<void> {
       captureException: (e, ctx) => Sentry.captureException(e, ctx as unknown),
       captureMessage: (m, ctx) => Sentry.captureMessage(m, ctx as unknown),
     });
-
   } catch {
-    // @sentry/nextjs not installed — silently stay on the logger-only path.
+    // Sentry setup must never break the app path it is observing.
   }
 }

@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
-// Real hero CTAs: "Cari Tukang" → /search, "Jadi Mitra" → /onboarding.
-// Navbar logged-out CTA is "Masuk" → /login.
+// Real hero CTAs: "Cari Tukang" -> /search, "Jadi Mitra" -> /onboarding.
+// Navbar logged-out CTA is "Masuk" -> /login.
 
 test.describe('Homepage', () => {
   test('tampil headline + CTA utama', async ({ page }) => {
@@ -19,14 +19,30 @@ test.describe('Homepage', () => {
     );
   });
 
-  test('blok statistik tampil', async ({ page }) => {
+  test('blok statistik tidak pernah menampilkan angka nol palsu', async ({ page, request }) => {
     await page.goto('/');
-    const stats = page.getByLabel('Statistik gegarap.id');
-    await expect(stats.getByText('Tukang Terverifikasi', { exact: true })).toBeVisible();
-    await expect(stats.getByText('Pekerjaan Selesai', { exact: true })).toBeVisible();
+    const response = await request.get('/api/stats');
+
+    if (response.ok()) {
+      const stats = (await response.json()) as {
+        workerCount?: number;
+        avgRating?: number;
+        jobCount?: number;
+      };
+      const shouldRender = Boolean(stats.workerCount && stats.avgRating && stats.jobCount);
+      if (shouldRender) {
+        const row = page.getByLabel('Statistik gegarap.id');
+        await expect(row.getByText('Tukang Terverifikasi', { exact: true })).toBeVisible();
+        await expect(row.getByText('Pekerjaan Selesai', { exact: true })).toBeVisible();
+      } else {
+        await expect(page.getByLabel('Statistik gegarap.id')).toHaveCount(0);
+      }
+    } else {
+      await expect(page.getByLabel('Statistik gegarap.id')).toHaveCount(0);
+    }
   });
 
-  test('navbar belum login → tautan Masuk ke /login', async ({ page }) => {
+  test('navbar belum login punya tautan Masuk ke /login', async ({ page }) => {
     await page.goto('/');
     const masuk = page.getByRole('link', { name: 'Masuk' }).first();
     if ((await masuk.count()) === 0) {

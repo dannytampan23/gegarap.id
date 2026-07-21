@@ -3,7 +3,7 @@
 A modern two-sided marketplace connecting customers with verified local tradespeople
 (_tukang_) across Yogyakarta, Indonesia.
 
-Built with **Next.js 14 (App Router)**, **Firebase Auth**, **managed PostgreSQL +
+Built with **Next.js 16 (App Router)**, **React 19**, **Firebase Auth**, **managed PostgreSQL +
 Prisma 7**, **Tailwind CSS**, Midtrans payments, and Supabase Storage.
 
 ## Features
@@ -21,7 +21,7 @@ Prisma 7**, **Tailwind CSS**, Midtrans payments, and Supabase Storage.
 
 | Layer | Choice |
 | --- | --- |
-| Framework | Next.js 14 App Router, React 18 |
+| Framework | Next.js 16 App Router, React 19 |
 | Runtime | Node.js 22.x |
 | Database | Managed PostgreSQL via Prisma 7 and `@prisma/adapter-pg` |
 | Auth | Firebase Auth + Firestore identity bridge |
@@ -126,6 +126,8 @@ node .\node_modules\vitest\vitest.mjs run
 | `npm run typecheck` | Run TypeScript without emitting files |
 | `npm test` | Run unit tests |
 | `npm run test:e2e` | Run Playwright tests |
+| `npm run test:e2e:smoke` | Run the CI-friendly Chromium smoke subset |
+| `npm run audit:deps` | Run npm dependency audit at moderate severity and above |
 | `npm run format` | Format with Prettier |
 
 ## Project Structure

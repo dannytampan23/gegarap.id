@@ -79,6 +79,18 @@ jobs:
       - name: Test (skipped if no `test` script)
         run: npm test --if-present
 
+      - name: Install Chromium for smoke e2e
+        run: npx playwright install --with-deps chromium
+
+      - name: Smoke e2e
+        run: npm run test:e2e:smoke
+        env:
+          E2E_TESTING: 'true'
+          DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder?schema=public
+          NEXT_PUBLIC_FIREBASE_API_KEY: AIzaSyAXDLfO3XFwwy1ST4n4DAWktrA5ftNhz5s
+          NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: gegarap.firebaseapp.com
+          NEXT_PUBLIC_FIREBASE_PROJECT_ID: gegarap
+
   # ----------------------------------------------------------------------- #
   # 2. DB MIGRATIONS — apply Prisma migrations to Supabase Postgres          #
   #    Runs only on push to main, after ci passes, before the app deploys.  #

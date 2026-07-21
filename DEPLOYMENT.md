@@ -5,7 +5,7 @@ GitHub Actions pipeline ships the app — no manual deploy steps.
 
 ## Architecture
 
-gegarap.id is a **Next.js 14 monolith**: the UI and the API (route handlers under
+gegarap.id is a **Next.js 16 / React 19 monolith**: the UI and the API (route handlers under
 `src/app/api/`) compile into a single deployable unit, hosted on Vercel. Auth,
 data, storage and messaging are external managed services.
 
@@ -16,7 +16,7 @@ data, storage and messaging are external managed services.
 | Domain & money models (users, jobs, payments, ledger) | **Managed Postgres** | via `DATABASE_URL` (Railway/Neon/Supabase); Prisma + `@prisma/adapter-pg` |
 | File storage (KTP / KYC docs) | **Supabase Storage** | private bucket + signed URLs |
 | Payments / escrow | **Midtrans** | Snap + webhooks |
-| WhatsApp (OTP + notifications) | **Meta WhatsApp Cloud API** | template messages |
+| WhatsApp contact | Stored customer/provider phone numbers | surfaced as wa.me click-to-chat links |
 | Pipeline (lint/build → migrate → deploy) | **GitHub Actions** | `.github/workflows/ci-cd.yml` |
 
 > **Hybrid auth.** Firebase owns authentication and a small `users/{uid}` profile
@@ -172,7 +172,30 @@ so you never touch production data. Requirements & gotchas:
 ```bash
 npm run dev          # emulators + next
 npm run typecheck && npm run lint && npm test   # the CI gate, locally
+npm run test:e2e:smoke   # CI-friendly browser smoke subset
+npm run audit:deps       # dependency vulnerability audit
 ```
+
+Use Node.js 22.x for local and CI parity. Running newer local majors may work,
+but npm will warn because `package.json` intentionally pins the production engine.
+
+---
+
+## Observability and maintenance
+
+Production should configure `SENTRY_DSN` so server and route errors are forwarded
+through `src/instrumentation.ts` and tagged by call sites that know payment or
+booking IDs. Keep `/api/health`, the production smoke test, and the scheduled
+maintenance workflow green before promoting a release.
+
+Run the dependency audit on a regular cadence:
+
+```bash
+npm run audit:deps
+```
+
+Treat moderate+ advisories in payment, auth, storage, and server-rendering
+dependencies as release blockers unless a documented mitigation already exists.
 
 ---
 

@@ -5,6 +5,7 @@ import prisma from '@/lib/prisma';
 import { enqueueIdentitySync } from '@/lib/identity-sync';
 
 export const SESSION_COOKIE = 'session';
+const E2E_SESSION_COOKIE = 'e2e-session';
 /** Session cookie lifetime — 14 days, matching the old JWT expiry. */
 export const SESSION_EXPIRES_IN_MS = 60 * 60 * 24 * 14 * 1000;
 
@@ -22,7 +23,13 @@ export interface AppSession {
 
 /** Verify the session cookie and return only the uid (cheap, no DB hit). */
 export async function getSessionUid(): Promise<string | null> {
-  const cookie = (await cookies()).get(SESSION_COOKIE)?.value;
+  const store = await cookies();
+  if (process.env.E2E_TESTING === 'true') {
+    const e2eUid = store.get(E2E_SESSION_COOKIE)?.value;
+    if (e2eUid) return e2eUid;
+  }
+
+  const cookie = store.get(SESSION_COOKIE)?.value;
   if (!cookie) return null;
   try {
     const decoded = await adminAuth.verifySessionCookie(cookie, true);
@@ -39,7 +46,13 @@ export async function getSessionUid(): Promise<string | null> {
  * (the authoritative domain record); `image` from the Firebase token.
  */
 export async function getSession(): Promise<AppSession | null> {
-  const cookie = (await cookies()).get(SESSION_COOKIE)?.value;
+  const store = await cookies();
+  if (process.env.E2E_TESTING === 'true') {
+    const e2eUid = store.get(E2E_SESSION_COOKIE)?.value;
+    if (e2eUid) return sessionFromUid(e2eUid, null);
+  }
+
+  const cookie = store.get(SESSION_COOKIE)?.value;
   if (!cookie) return null;
 
   let decoded;
@@ -49,8 +62,12 @@ export async function getSession(): Promise<AppSession | null> {
     return null;
   }
 
+  return sessionFromUid(decoded.uid, (decoded.picture as string | undefined) ?? null);
+}
+
+async function sessionFromUid(uid: string, image: string | null): Promise<AppSession | null> {
   const user = await prisma.user.findUnique({
-    where: { id: decoded.uid },
+    where: { id: uid },
     select: { id: true, name: true, email: true, phone: true, role: true },
   });
   if (!user) return null;
@@ -62,7 +79,7 @@ export async function getSession(): Promise<AppSession | null> {
       email: user.email,
       phone: user.phone,
       role: user.role,
-      image: (decoded.picture as string | undefined) ?? null,
+      image,
     },
   };
 }
