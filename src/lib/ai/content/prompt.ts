@@ -9,7 +9,7 @@
  *
  * `fallbackArticle` mirrors the assistant's no-LLM path: a grounded, genuinely
  * useful article assembled from the topic + category templates, so the feature
- * degrades instead of breaking when `ANTHROPIC_API_KEY` is absent.
+ * degrades instead of breaking when `OPENAI_API_KEY` is absent.
  */
 
 import { CATEGORY_CTA, type ModelArticle, type TopicInput } from './schema';
@@ -87,7 +87,7 @@ export function clampText(s: string, max: number): string {
 }
 
 /**
- * Deterministic, grounded fallback when Claude is unavailable. Produces a real,
+ * Deterministic, grounded fallback when OpenAI is unavailable. Produces a real,
  * publishable article (not a stub) using the topic + category context, so the
  * pipeline degrades gracefully — mirrors the Midtrans/email/assistant no-op path.
  */

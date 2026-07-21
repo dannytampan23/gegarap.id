@@ -34,11 +34,11 @@ conversation persistence, and response envelope.
 1. Parse JSON body.
 2. Sanitize `message`.
 3. Resolve Firebase session for optional `userId`.
-4. Rate limit by `sessionId` or client IP.
+4. Rate limit by authenticated user id or client IP.
 5. Extract filters and normalize conversation history.
 6. Cache by message, filters, and history.
 7. On cache miss, search providers and call `processChat`.
-8. If the model path fails, use deterministic fallback recommendation.
+8. If OpenAI is unavailable or the model path fails, use deterministic fallback recommendation.
 9. Persist the latest user and assistant turns to `ChatSession`.
 10. Strip `debug` in production.
 11. Return the assistant payload plus UI metadata.
@@ -60,6 +60,9 @@ Legacy UI fields are still returned during the chat UI migration:
 - `rekomendasi`
 - `catatan`
 - `cta`
+
+The route also returns `providers`, `sessionId`, and `mock`. `mock` is true when
+the cached payload source is fallback rather than OpenAI.
 
 ## Safety
 

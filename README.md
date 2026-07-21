@@ -30,7 +30,7 @@ Prisma 7**, **Tailwind CSS**, Midtrans payments, and Supabase Storage.
 | Styling | Tailwind CSS and CSS-variable design tokens |
 | Validation | Zod shared between client and server |
 | Maps | Leaflet / react-leaflet |
-| AI | Anthropic Claude when `ANTHROPIC_API_KEY` is configured, deterministic fallback otherwise |
+| AI | OpenAI Responses API when `OPENAI_API_KEY` is configured, deterministic fallback otherwise |
 
 ## Getting Started
 
@@ -68,7 +68,7 @@ Copy-Item .env.example .env
 
 Set `DATABASE_URL` in `.env` to your managed PostgreSQL connection string. Most
 external integrations are optional in local development: blank Midtrans, Supabase,
-email, and Anthropic credentials degrade to safe mock or fallback behavior.
+email, and OpenAI credentials degrade to safe mock or fallback behavior.
 
 ### 3. Apply Schema and Seed
 

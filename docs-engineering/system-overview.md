@@ -13,7 +13,7 @@ workers (tukang) in Indonesia, with an escrow-backed payment flow.
 | Auth | Firebase Auth (email/password + Google) + Firestore identity | Managed auth; Postgres stays the source of truth for domain data |
 | Payments | Midtrans Snap (charge) + Iris/gateway (disbursement, pluggable) | Indonesian market gateway; disbursement provider is swappable |
 | File storage | Supabase Storage (private KTP bucket, signed URLs) | KYC documents kept off the app server |
-| AI assistant | Anthropic Claude (`claude-sonnet-4-6`) over a keyword/filter RAG | Structured assistant search with a deterministic fallback |
+| AI assistant | OpenAI Responses API over a keyword/filter RAG | Structured assistant search with a deterministic fallback |
 | Hosting | Vercel (cloud build), GitHub Actions deploy pipeline | `ci → migrate → deploy-production` on push to `main` |
 
 ## System boundaries

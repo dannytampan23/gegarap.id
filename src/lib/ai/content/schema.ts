@@ -1,12 +1,9 @@
 /**
  * Output contract + constants for the AI content engine (System 5).
  *
- * The JSON shape Claude must return is enforced STRUCTURALLY via
- * `ARTICLE_SCHEMA` (Anthropic structured outputs / output_config.format), the
- * same pattern as the assistant (System 4) — so we never hand-parse free-form
- * text. The model owns the *prose* (title, body, FAQ, self-audit); the
- * orchestrator owns the *grounded* facts (slug, internal links, dedup score,
- * CTA enforcement) so nothing user-facing can be hallucinated.
+ * The model response shape is enforced structurally with OpenAI structured
+ * outputs. The model owns prose; the orchestrator owns grounded facts such as
+ * slugs, internal links, dedup score, and CTA enforcement.
  */
 
 import { PROVIDER_CATEGORIES } from '@/lib/validations';
@@ -16,7 +13,7 @@ export type ContentCategory = (typeof PROVIDER_CATEGORIES)[number];
 
 export type Intent = 'informational' | 'transactional';
 
-/** The pipeline's input — what a topic looks like before generation. */
+/** The pipeline input before generation. */
 export interface TopicInput {
   topic: string;
   location: string;
@@ -53,7 +50,7 @@ export interface DuplicateCheck {
   new_angle: string;
 }
 
-/** The strict, ready-to-publish contract (matches the spec's OUTPUT FORMAT). */
+/** The strict, ready-to-publish contract. */
 export interface GeneratedArticle {
   title: string;
   meta_description: string;
@@ -64,13 +61,13 @@ export interface GeneratedArticle {
   duplicate_check: DuplicateCheck;
 }
 
-/** What the MODEL returns. Grounded fields (links/dedup) are added server-side. */
+/** What the model returns. Grounded fields are added server-side. */
 export interface ModelArticle {
   title: string;
   meta_description: string;
   content_markdown: string;
   faq: FaqItem[];
-  /** Free-text link ideas, used only as audit hints — never rendered raw. */
+  /** Free-text link ideas, used only as audit hints; never rendered raw. */
   internal_link_ideas: string[];
   quality_score: QualityScore;
   /** The pivot the model took to stay distinct from existing titles. */
@@ -82,7 +79,7 @@ export const META_MAX = 155;
 /** Self-audit gate: any criterion below this triggers one refinement pass. */
 export const MIN_SCORE = 8;
 
-/** Dynamic conversion CTA per category (spec's CONVERSION ENGINE). */
+/** Dynamic conversion CTA per category. */
 export const CATEGORY_CTA: Record<ContentCategory, string> = {
   'Tukang Ledeng': 'Pesan Tukang Ledeng Terpercaya Sekarang',
   'Tukang Listrik': 'Hubungi Tukang Listrik Profesional Sekarang',
@@ -91,7 +88,7 @@ export const CATEGORY_CTA: Record<ContentCategory, string> = {
   'Tukang Bangunan': 'Hubungi Tukang Bangunan Profesional Sekarang',
 };
 
-/** JSON Schema for Anthropic structured outputs (output_config.format). */
+/** JSON Schema for OpenAI structured outputs. */
 export const ARTICLE_SCHEMA = {
   type: 'object',
   additionalProperties: false,

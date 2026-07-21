@@ -1,4 +1,4 @@
-import Anthropic from '@anthropic-ai/sdk';
+import { createStructuredResponse, DEFAULT_OPENAI_MODEL, isOpenAIConfigured } from '@/lib/ai/openai';
 import { logEvent } from '@/lib/logger';
 import {
   SYSTEM_PROMPT,
@@ -9,10 +9,7 @@ import {
 } from './prompt';
 import type { SearchedProvider } from './search';
 
-const MODEL = 'claude-sonnet-4-6';
-const apiKey = process.env.ANTHROPIC_API_KEY;
-
-export const isAIConfigured = Boolean(apiKey);
+export const isAIConfigured = isOpenAIConfigured;
 
 export interface ChatTurn {
   role: 'user' | 'assistant';
@@ -31,29 +28,26 @@ export async function generateRecommendation(input: {
 }): Promise<RecommendationResult> {
   const { query, providers, history = [] } = input;
 
-  if (!isAIConfigured) {
+  if (!isAIConfigured()) {
     return { recommendation: fallbackRecommendation(query, providers), mock: true };
   }
 
   try {
-    const client = new Anthropic({ apiKey: apiKey! });
-    const messages: Anthropic.MessageParam[] = [
+    const messages: Array<{ role: 'user' | 'assistant'; content: string }> = [
       ...history.slice(-6).map((t) => ({ role: t.role, content: t.content })),
       { role: 'user', content: buildUserTurn(query, providers) },
     ];
 
-    const res = await client.messages.create({
-      model: MODEL,
-      max_tokens: 1536,
-      thinking: { type: 'disabled' },
+    const parsed = await createStructuredResponse<ChatRecommendation>({
+      model: process.env.GEGARAP_AI_MODEL || DEFAULT_OPENAI_MODEL,
+      maxOutputTokens: 1536,
       system: SYSTEM_PROMPT,
-      messages,
-      output_config: { format: { type: 'json_schema', schema: RECOMMENDATION_SCHEMA } },
+      input: messages,
+      schemaName: 'gegarap_recommendation',
+      schemaDescription: 'Legacy recommendation shape for the Gegarap chat UI',
+      schema: RECOMMENDATION_SCHEMA,
     });
 
-    const block = res.content.find((b) => b.type === 'text');
-    if (!block || block.type !== 'text') throw new Error('no text content');
-    const parsed = JSON.parse(block.text) as ChatRecommendation;
     if (typeof parsed.pesan !== 'string' || !Array.isArray(parsed.rekomendasi)) {
       throw new Error('unexpected shape');
     }

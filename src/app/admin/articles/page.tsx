@@ -36,9 +36,9 @@ export default async function AdminArticlesPage() {
           memesan tukang. Setiap artikel melewati audit kualitas dan pengecekan duplikat sebelum
           tersimpan sebagai draf.
         </p>
-        {!isContentAIConfigured && (
+        {!isContentAIConfigured() && (
           <p className="mt-3 rounded-xl border border-amber-300/60 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-            Mode fallback: <code>ANTHROPIC_API_KEY</code> belum diset, jadi artikel dibuat dari
+            Mode fallback: <code>OPENAI_API_KEY</code> belum diset, jadi artikel dibuat dari
             template grounded (bukan LLM). Tetap dapat dipublikasikan, lalu di-regenerate setelah key
             tersedia.
           </p>

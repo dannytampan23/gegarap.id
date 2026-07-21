@@ -3,7 +3,7 @@
 Prompt construction and the output contract for the AI assistant. The system
 prompt holds the stable persona/rules; the per-request provider shortlist is
 injected into the user turn. The response shape is enforced structurally by
-`RECOMMENDATION_SCHEMA` (Anthropic structured outputs), so replies are never
+`RECOMMENDATION_SCHEMA` (OpenAI structured outputs), so replies are never
 hand-parsed — the schema is the source of truth.
 
 ## Types
@@ -13,7 +13,7 @@ hand-parsed — the schema is the source of truth.
 
 ## Constant: RECOMMENDATION_SCHEMA
 
-- **Purpose:** JSON Schema passed to `output_config.format` so Claude returns exactly the four-field shape.
+- **Purpose:** JSON Schema passed to OpenAI structured outputs so the model returns exactly the four-field shape.
 - **Notes:** `additionalProperties: false`; all four fields required. `rekomendasi` may be an empty array.
 
 ## Constant: SYSTEM_PROMPT
@@ -32,7 +32,7 @@ hand-parsed — the schema is the source of truth.
 
 ## Function: fallbackRecommendation
 
-- **Purpose:** Deterministic, grounded result used when Claude is unavailable (no `ANTHROPIC_API_KEY`, or an error).
+- **Purpose:** Deterministic, grounded result used when OpenAI is unavailable (no `OPENAI_API_KEY`, or an error).
 - **Input:** `query`, `providers`.
 - **Output:** `ChatRecommendation`.
 - **Logic:** Empty providers → friendly "loosen criteria" message with empty `rekomendasi`; otherwise map the top 3 (search order) to grounded rows. Mirrors the Midtrans/email no-op pattern: the feature degrades instead of breaking.

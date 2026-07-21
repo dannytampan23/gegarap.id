@@ -3,7 +3,7 @@
  *
  * Pipeline: topic → SEO structuring → generation → self-audit → dedup →
  * grounded internal links → strict JSON, ready for publishing. Mirrors the
- * assistant (System 4) engineering contract: Anthropic structured outputs with a
+ * assistant (System 4) engineering contract: OpenAI structured outputs with a
  * deterministic, grounded fallback.
  */
 

@@ -1,5 +1,7 @@
-import Anthropic from '@anthropic-ai/sdk';
 import { logEvent } from '@/lib/logger';
+import { createStructuredResponse, DEFAULT_OPENAI_MODEL, isOpenAIConfigured } from '@/lib/ai/openai';
+import { fallbackRecommendation } from '@/lib/ai/prompt';
+import type { SearchedProvider } from '@/lib/ai/search';
 import { AssistantRequest, AssistantResponse } from './types';
 import { runSafetyClassifier } from './safety-classifier';
 import { detectCategory } from './diagnosis-classifier';
@@ -17,7 +19,6 @@ import { CATEGORIES_PROMPT } from './prompts/categories';
 import { TONE_PROMPT } from './prompts/tone';
 import { INSIGHT_PROMPT } from './prompts/insight';
 
-const DEFAULT_LITE_MODEL = 'claude-3-5-haiku-20241022';
 const MAX_OUTPUT_TOKENS = 1024;
 
 const rp = (n: number) => `Rp ${n.toLocaleString('id-ID')}`;
@@ -64,6 +65,48 @@ function buildProviderContext(providers: AssistantRequest['providers']): string 
         (p.bio ? `Bio: ${p.bio}\n` : '')
     )
     .join('\n');
+}
+
+function buildDeterministicFallbackResponse(
+  query: string,
+  category: string | null,
+  providers: AssistantRequest['providers']
+): AssistantResponse {
+  const fallbackProviders: SearchedProvider[] = providers.map((p) => ({
+    id: p.id,
+    name: p.name,
+    category: p.category,
+    categories: p.categories ?? [],
+    districts: p.districts ?? [],
+    dailyRate: p.dailyRate,
+    rating: p.rating,
+    ratingCount: p.ratingCount,
+    completedJobs: p.completedJobs,
+    bio: p.bio ?? null,
+    avatarUrl: null,
+    fraudBadge: p.fraudBadge ?? null,
+  }));
+  const legacy = fallbackRecommendation(query, fallbackProviders);
+  const message = legacy.pesan;
+  return {
+    message,
+    category: category || 'Lainnya',
+    riskLevel: 'low',
+    confidenceLevel: legacy.rekomendasi.length > 0 ? 'medium' : 'low',
+    bookingEligible: legacy.rekomendasi.length > 0,
+    suggestedNextAction:
+      legacy.rekomendasi.length > 0
+        ? 'Pilih salah satu tukang yang direkomendasikan.'
+        : 'Lanjutkan diagnosa dengan satu pertanyaan klarifikasi.',
+    quickReplies:
+      legacy.rekomendasi.length > 0
+        ? ['Bandingkan pilihan', 'Cari area lain', 'Saya mau booking']
+        : ['Gejalanya makin parah', 'Terjadi sejak hari ini', 'Saya butuh teknisi'],
+    pesan: message,
+    rekomendasi: legacy.rekomendasi,
+    catatan: legacy.catatan,
+    cta: legacy.cta,
+  };
 }
 
 function buildCriticalSafetyResponse(query: string, category: string | null): AssistantResponse {
@@ -134,20 +177,18 @@ export async function processChat(req: AssistantRequest): Promise<AssistantRespo
     `PERMINTAAN PENGGUNA TERBARU:\n"${query}"\n\n` +
     'Gunakan konteks RAG diagnosa dan data tukang di system prompt. Jika keduanya tidak cukup, ajukan satu pertanyaan klarifikasi terbaik.';
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    throw new Error('Anthropic API key is not configured');
+  if (!isOpenAIConfigured()) {
+    return buildDeterministicFallbackResponse(query, category, providers);
   }
 
-  const client = new Anthropic({ apiKey });
-
-  const messages: Anthropic.MessageParam[] = [
+  const messages: Array<{ role: 'user' | 'assistant'; content: string }> = [
     ...history.slice(-10).map((t) => ({ role: t.role, content: t.content })),
     { role: 'user', content: userPrompt },
   ];
 
-  const jsonSchema: Anthropic.Tool.InputSchema = {
+  const jsonSchema = {
     type: 'object',
+    additionalProperties: false,
     properties: {
       message: { type: 'string', description: 'Jawaban utama asisten. Maks 5 paragraf pendek.' },
       category: { type: 'string', description: 'Kategori masalah (misal: AC, Listrik, Plumbing)' },
@@ -170,34 +211,39 @@ export async function processChat(req: AssistantRequest): Promise<AssistantRespo
             alasan: { type: 'string' },
             highlight: { type: 'string' }
           },
+          additionalProperties: false,
           required: ['id', 'nama', 'layanan', 'estimasi_harga', 'rating', 'alasan', 'highlight']
         }
       },
       catatan: { type: 'string' },
       cta: { type: 'string' }
     },
-    required: ['message', 'category', 'riskLevel', 'confidenceLevel', 'bookingEligible', 'suggestedNextAction', 'pesan', 'rekomendasi', 'catatan', 'cta']
-  };
+    required: [
+      'message',
+      'category',
+      'riskLevel',
+      'confidenceLevel',
+      'bookingEligible',
+      'suggestedNextAction',
+      'quickReplies',
+      'pesan',
+      'rekomendasi',
+      'catatan',
+      'cta'
+    ]
+  } satisfies Record<string, unknown>;
 
-  const res = await client.messages.create({
-    model: process.env.GEGARAP_AI_MODEL || DEFAULT_LITE_MODEL,
-    max_tokens: Number(process.env.GEGARAP_AI_MAX_TOKENS) || MAX_OUTPUT_TOKENS,
+  const output = await createStructuredResponse<unknown>({
+    model: process.env.GEGARAP_AI_MODEL || DEFAULT_OPENAI_MODEL,
+    maxOutputTokens: Number(process.env.GEGARAP_AI_MAX_TOKENS) || MAX_OUTPUT_TOKENS,
     system: fullSystemPrompt,
-    messages,
-    tools: [
-      {
-        name: 'respond',
-        description: 'Respond to the user',
-        input_schema: jsonSchema
-      }
-    ],
-    tool_choice: { type: 'tool', name: 'respond' }
+    input: messages,
+    schemaName: 'gegarap_assistant_response',
+    schemaDescription: 'Structured response for the Gegarap home-services assistant',
+    schema: jsonSchema,
   });
 
-  const toolCall = res.content.find((b) => b.type === 'tool_use');
-  if (!toolCall || toolCall.type !== 'tool_use') throw new Error('No structured response returned');
-
-  const schemaResult = assistantResponseSchema.safeParse(toolCall.input);
+  const schemaResult = assistantResponseSchema.safeParse(output);
   if (!schemaResult.success) {
     logEvent('ai.chat.schema_invalid', { issues: schemaResult.error.issues.map((issue) => issue.path.join('.')) }, 'warn');
     return buildDiagnosisFallback(query, category);

@@ -77,7 +77,7 @@ model Article {
   newAngle        String?
 
   status      String    @default("DRAFT") // DRAFT | PUBLISHED | ARCHIVED
-  generatedBy String    @default("fallback") // "claude-sonnet-4-6" | "fallback"
+  generatedBy String    @default("fallback") // OpenAI model id | "fallback"
   authorId    String? // admin User.id who generated it (null = system)
   publishedAt DateTime?
   createdAt   DateTime  @default(now())

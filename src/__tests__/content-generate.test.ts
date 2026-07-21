@@ -1,15 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
-
-// Force determinism: even if ANTHROPIC_API_KEY is set in the env, the SDK call
-// rejects, so generateArticle always lands on the grounded fallback path. This
-// exercises the orchestrator's finalize() logic (CTA enforcement, length caps,
-// grounded links, dedup) without any network.
-vi.mock('@anthropic-ai/sdk', () => ({
-  __esModule: true,
-  default: class {
-    messages = { create: vi.fn().mockRejectedValue(new Error('no network in test')) };
-  },
-}));
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { generateArticle } from '@/lib/ai/content/generate';
 import { CATEGORY_CTA, TITLE_MAX, META_MAX } from '@/lib/ai/content/schema';
@@ -24,6 +13,14 @@ const baseInput = {
 };
 
 describe('generateArticle (fallback grounding)', () => {
+  beforeEach(() => {
+    vi.stubEnv('OPENAI_API_KEY', '');
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it('menghasilkan artikel siap terbit dengan struktur lengkap', async () => {
     const { article, slug, generatedBy } = await generateArticle(baseInput);
     expect(generatedBy).toBe('fallback');

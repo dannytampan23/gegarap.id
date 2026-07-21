@@ -4,7 +4,7 @@
  * Per the chosen approach this is a STRUCTURED + KEYWORD search over the real
  * `ProviderProfile` table via Prisma (no embeddings/pgvector): pre-filter by
  * kota/layanan/budget, rank by trust signals, drop fraud-suspicious rows, and
- * return a small client-safe shortlist that gets injected into the Claude prompt
+ * return a small client-safe shortlist that gets injected into the model prompt
  * for final ranking. Only verified, available providers are ever surfaced, and
  * the projection reuses the public DTO gate so no PII leaks.
  */

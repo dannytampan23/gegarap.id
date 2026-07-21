@@ -1,33 +1,34 @@
 # Mapping: src/lib/ai/chat.ts
 
-The Claude call for the assistant. Uses `@anthropic-ai/sdk` with
-`claude-sonnet-4-6` and structured outputs (`output_config.format`) so the JSON
-contract is guaranteed by the API. Without `ANTHROPIC_API_KEY` — or on any error
-— it returns the deterministic grounded fallback from `prompt.ts`.
+Legacy recommendation helper for the assistant UI migration path. It calls the
+OpenAI Responses API through `src/lib/ai/openai.ts` with structured outputs, so
+the JSON contract is validated by the API response format and then checked again
+by local shape guards.
+
+Without `OPENAI_API_KEY`, or when a model call fails, the helper degrades to the
+deterministic grounded fallback from `src/lib/ai/prompt.ts`.
 
 ## Constants
 
-- `MODEL = 'claude-sonnet-4-6'`.
-- `isAIConfigured: boolean` — true when `ANTHROPIC_API_KEY` is set. When false, `generateRecommendation` short-circuits to the fallback and reports `mock: true`.
-
-## Types
-
-- `ChatTurn` — `{ role: 'user' | 'assistant', content: string }`.
-- `RecommendationResult` — `{ recommendation, mock }`. `mock === true` means the deterministic fallback produced the turn with **no** LLM call. A cache hit or an LLM error both report `mock: false`.
+- Default model is `gpt-5.6-sol`, overridable with `GEGARAP_AI_MODEL`.
+- `isAIConfigured()` returns true when `OPENAI_API_KEY` is set.
 
 ## Function: generateRecommendation
 
-- **Purpose:** Produce one assistant turn from a query + retrieved providers + short history.
-- **Input:** `{ query, providers, history? }`.
-- **Output:** `Promise<RecommendationResult>`.
-- **Flow:**
-  - no API key → fallback (`mock: true`);
-  - else build messages = last 6 history turns + the `buildUserTurn` message;
-  - call Claude (`thinking: disabled`, structured `json_schema`);
-  - parse the text block, validate `pesan`/`rekomendasi` shape, log `ai.chat`;
-  - any throw → fallback (`mock: false`), log `ai.chat.failed`.
-- **Reasoning:** History is capped at 6 turns to bound token cost. Structured output shapes the JSON, so there is no fragile prompt-parsing.
+Input:
 
-## Consumers
+```ts
+{
+  query: string;
+  providers: SearchedProvider[];
+  history?: { role: 'user' | 'assistant'; content: string }[];
+}
+```
 
-`src/app/api/ai/chat/route.ts`.
+Flow:
+
+1. If OpenAI is not configured, return `fallbackRecommendation(...), mock: true`.
+2. Build a grounded user turn with the provider shortlist.
+3. Call OpenAI Responses with `RECOMMENDATION_SCHEMA`.
+4. Validate the minimal legacy shape.
+5. On failure, log and return deterministic fallback.

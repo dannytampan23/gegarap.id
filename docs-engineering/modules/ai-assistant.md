@@ -65,7 +65,7 @@ POST /api/ai/chat
      -> conversation memory
      -> lightweight RAG snippet retrieval
      -> modular prompt assembly
-     -> Anthropic tool response
+     -> OpenAI structured response
      -> Zod validation
      -> quality guard
      -> booking handoff
@@ -80,8 +80,8 @@ first through `processChat`.
 
 ## Production Notes
 
-- `ANTHROPIC_API_KEY` is required for model-backed consultation.
-- The default model is `claude-3-5-haiku-20241022` for lite, low-latency chat.
+- `OPENAI_API_KEY` is required for model-backed consultation.
+- The default model is `gpt-5.6-sol`.
   Override with `GEGARAP_AI_MODEL` and `GEGARAP_AI_MAX_TOKENS` when needed.
 - `NODE_ENV=production` strips any `debug` payload before responding.
 - Recommendations must only use provider data returned from the search layer.

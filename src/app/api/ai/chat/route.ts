@@ -7,6 +7,7 @@ import { durableRateLimit, clientIp } from '@/lib/rate-limit';
 import { cacheGet, cacheSet } from '@/lib/cache';
 import { extractFilters } from '@/lib/ai/extract';
 import { searchProviders, type SearchedProvider } from '@/lib/ai/search';
+import { isOpenAIConfigured } from '@/lib/ai/openai';
 import { logEvent } from '@/lib/logger';
 
 import { processChat, AssistantResponse } from '@/ai/gegarap-assistant';
@@ -22,6 +23,7 @@ const CACHE_TTL_SECONDS = 300;
 interface ChatPayload {
   recommendation: AssistantResponse;
   providers: SearchedProvider[];
+  source: 'openai' | 'fallback';
 }
 
 function sanitize(raw: unknown): string | null {
@@ -79,13 +81,13 @@ export async function POST(req: Request) {
       .update(`${message}|${JSON.stringify(filters)}|${JSON.stringify(history)}`)
       .digest('hex')}`;
     let payload = await cacheGet<ChatPayload>(cacheKey);
-    let mock = false;
 
     if (!payload) {
       const safety = runSafetyClassifier(message);
       const providers = safety.riskLevel === 'critical' ? [] : await searchProviders(message, filters);
 
       let recommendation: AssistantResponse;
+      let source: ChatPayload['source'] = isOpenAIConfigured() ? 'openai' : 'fallback';
       try {
         recommendation = await processChat({
           query: message,
@@ -94,7 +96,7 @@ export async function POST(req: Request) {
         });
       } catch (e) {
         logEvent('ai.chat.engine_failed', { error: String(e) }, 'warn');
-        mock = true;
+        source = 'fallback';
         const legacy = fallbackRecommendation(message, providers);
         recommendation = {
           message: legacy.pesan,
@@ -110,7 +112,7 @@ export async function POST(req: Request) {
         };
       }
 
-      payload = { recommendation, providers };
+      payload = { recommendation, providers, source };
       await cacheSet(cacheKey, payload, CACHE_TTL_SECONDS);
     }
 
@@ -155,7 +157,7 @@ export async function POST(req: Request) {
       ...payload.recommendation,
       providers: payload.providers,
       sessionId: resolvedSessionId,
-      mock,
+      mock: payload.source !== 'openai',
     });
   } catch (err) {
     logEvent('ai.chat.error', { error: String(err) }, 'error');
