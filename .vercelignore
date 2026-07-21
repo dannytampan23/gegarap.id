@@ -1,0 +1,17 @@
+.env
+.env.local
+.env*.local
+.env.production
+.env.production.local
+
+coverage
+firebase-data
+playwright-report
+test-results
+
+dev-stack.log
+emu-run.log
+*-debug.log
+*.db
+*.db-shm
+*.db-wal
